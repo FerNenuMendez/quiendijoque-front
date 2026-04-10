@@ -1,15 +1,21 @@
 import './global.css';
-import { Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import LoginScreen from './src/screens/LoginScreen';
+import HomeScreen from './src/screens/HomeScreen';
+
+// Creamos el "Stack" de pantallas
+const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
-    <View className="flex-1 items-center justify-center bg-slate-900">
-      <Text className="text-3xl font-bold text-white mb-4">
-        ¡Quién Dijo Qué! 🎸
-      </Text>
-      <Text className="text-lg text-green-400">
-        Tailwind v4 está funcionando perfecto
-      </Text>
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {/* La primera pantalla de la lista es la que se muestra por defecto */}
+        <Stack.Screen name="Login" component={LoginScreen} />
+        {/* Agregamos el Home al listado */}
+        <Stack.Screen name="Home" component={HomeScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
