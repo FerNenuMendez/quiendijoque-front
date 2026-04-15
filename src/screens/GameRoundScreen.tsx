@@ -216,11 +216,13 @@ export default function GameRoundScreen() {
   const currentQuestion = questions[currentIndex];
 
   return (
-    <View className="flex-1 bg-slate-900 px-6 pt-16 pb-8">
+    <View className="flex-1 bg-slate-900 px-6 pt-16 pb-6">
       {/* HEADER: Botón salir, Contador Visual y Puntaje */}
-      <View className="flex-row justify-between items-center mb-10">
+      {/* 🔥 Usamos relative y height fijo para contener al timer absoluto */}
+      <View className="relative flex-row justify-between items-center mb-10 h-14">
+        {/* BOTÓN X (Izquierda) */}
         <TouchableOpacity
-          className="bg-slate-800 w-12 h-12 rounded-full items-center justify-center border border-slate-700"
+          className="bg-slate-800 w-12 h-12 rounded-full items-center justify-center border border-slate-700 z-10"
           onPress={() => {
             Alert.alert(
               '¿Salir de la partida?',
@@ -239,18 +241,21 @@ export default function GameRoundScreen() {
           <Text className="text-white font-bold">X</Text>
         </TouchableOpacity>
 
-        {/* 🔥 TIMER VISUAL en el centro */}
-        <View
-          className={`w-14 h-14 rounded-full items-center justify-center border-4 ${timeLeft <= 3 ? 'border-red-500 bg-red-500/10' : 'border-fuchsia-500 bg-fuchsia-500/10'}`}
-        >
-          <Text
-            className={`font-black text-xl ${timeLeft <= 3 ? 'text-red-500' : 'text-fuchsia-400'}`}
+        {/* 🔥 TIMER VISUAL (Clavado al centro en posición absoluta) */}
+        <View className="absolute left-0 right-0 items-center pointer-events-none">
+          <View
+            className={`w-14 h-14 rounded-full items-center justify-center border-4 ${timeLeft <= 3 ? 'border-red-500 bg-red-500/10' : 'border-fuchsia-500 bg-fuchsia-500/10'}`}
           >
-            {timeLeft}
-          </Text>
+            <Text
+              className={`font-black text-xl ${timeLeft <= 3 ? 'text-red-500' : 'text-fuchsia-400'}`}
+            >
+              {timeLeft}
+            </Text>
+          </View>
         </View>
 
-        <View className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm">
+        {/* PUNTAJE (Derecha con ancho mínimo fijo) */}
+        <View className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm z-10 min-w-[75px] items-center">
           <Text className="text-slate-900 font-extrabold">{score} pts</Text>
         </View>
       </View>
@@ -261,7 +266,7 @@ export default function GameRoundScreen() {
       </Text>
 
       {/* LA PREGUNTA (LA FRASE) */}
-      <View className="flex-1 justify-center mb-8">
+      <View className="justify-center mb-8 mt-4">
         <Text className="text-slate-400 font-medium text-lg text-center mb-4">
           ¿Quién dijo?
         </Text>
@@ -269,7 +274,6 @@ export default function GameRoundScreen() {
           "{currentQuestion?.text}"
         </Text>
 
-        {/* Mensajito extra si se acaba el tiempo */}
         {isChecking && selectedAuthorId === 'TIME_OUT' && (
           <Text className="text-red-500 text-center font-bold mt-6 text-lg">
             ¡Se acabó el tiempo! ⏳
@@ -284,11 +288,11 @@ export default function GameRoundScreen() {
 
           if (isChecking) {
             if (option.id === correctAuthorId) {
-              buttonStyle = 'bg-green-500 border-green-400'; // La correcta siempre se pinta de verde
+              buttonStyle = 'bg-green-500 border-green-400';
             } else if (option.id === selectedAuthorId) {
-              buttonStyle = 'bg-red-500 border-red-400'; // La incorrecta elegida se pinta de rojo
+              buttonStyle = 'bg-red-500 border-red-400';
             } else {
-              buttonStyle = 'bg-slate-800/50 border-slate-700/50 opacity-50'; // El resto se apaga
+              buttonStyle = 'bg-slate-800/50 border-slate-700/50 opacity-50';
             }
           }
 
@@ -316,6 +320,14 @@ export default function GameRoundScreen() {
             </TouchableOpacity>
           );
         })}
+      </View>
+
+      {/* 🔥 ESPACIADOR FLEXIBLE PARA EMPUJAR ADMOB AL FONDO */}
+      <View className="flex-1" />
+
+      {/* 🔥 PLACEHOLDER PUBLICIDAD ADMOB */}
+      <View className="w-full h-16 bg-slate-800/50 border border-slate-700 border-dashed rounded-xl items-center justify-center mt-4">
+        <Text className="text-slate-500 font-medium">Espacio AdMob Banner</Text>
       </View>
     </View>
   );

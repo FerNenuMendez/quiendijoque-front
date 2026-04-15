@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
@@ -23,6 +25,9 @@ export default function CreateGameScreen() {
   const navigation = useNavigation<any>();
   const [categories, setCategories] = useState<DBCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLockedModalVisible, setIsLockedModalVisible] = useState(false);
+  const [selectedLockedCategory, setSelectedLockedCategory] =
+    useState<any>(null);
 
   // 1. Buscamos las categorías a tu backend ni bien carga la pantalla
   useEffect(() => {
@@ -83,9 +88,16 @@ export default function CreateGameScreen() {
   };
 
   // 3. Acción al tocar la categoría: Viajamos a la pantalla del juego con el ID
-  const handleSelectCategory = (categoryId: string) => {
-    // Viajamos a 'GameRound' pasándole el _id de la categoría como parámetro
-    navigation.navigate('GameRound', { categoryId: categoryId });
+  const handleSelectCategory = (category: any, uniqueId: string) => {
+    // Si la categoría está bloqueada, levantamos el Modal
+    if (category.isLocked) {
+      setSelectedLockedCategory(category);
+      setIsLockedModalVisible(true);
+      return;
+    }
+
+    // Si está libre, entra a jugar
+    navigation.navigate('GameRound', { categoryId: uniqueId });
   };
 
   return (
@@ -136,7 +148,7 @@ export default function CreateGameScreen() {
               <TouchableOpacity
                 key={uniqueId}
                 className={`w-[48%] aspect-square ${style.color} rounded-3xl p-4 mb-4 justify-between items-start shadow-lg ${style.shadow} active:opacity-80`}
-                onPress={() => handleSelectCategory(uniqueId)}
+                onPress={() => handleSelectCategory(cat, uniqueId)}
               >
                 <View className="bg-white/20 p-3 rounded-2xl flex-row justify-between w-full items-center">
                   <Text className="text-4xl">{style.icon}</Text>
@@ -163,6 +175,79 @@ export default function CreateGameScreen() {
           Espacio reservado para Google AdMob
         </Text>
       </View>
+      {/* =========================================
+          🔥 EL PATOVICA: MODAL DE CATEGORÍA BLOQUEADA
+          ========================================= */}
+      <Modal
+        visible={isLockedModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsLockedModalVisible(false)}
+      >
+        <Pressable
+          className="flex-1 bg-black/80 justify-center items-center px-6"
+          onPress={() => setIsLockedModalVisible(false)}
+        >
+          <Pressable className="bg-slate-800 w-full p-8 rounded-3xl items-center border border-slate-700 shadow-2xl">
+            <View className="bg-slate-700 w-20 h-20 rounded-full items-center justify-center mb-6 border-4 border-slate-600">
+              <Text className="text-4xl">🔒</Text>
+            </View>
+
+            <Text className="text-2xl font-extrabold text-white text-center mb-2">
+              Categoría Premium
+            </Text>
+            <Text className="text-slate-400 text-center mb-8 text-base">
+              La categoría{' '}
+              <Text className="font-bold text-white">
+                "{selectedLockedCategory?.name}"
+              </Text>{' '}
+              es exclusiva para usuarios Plus.
+            </Text>
+
+            {/* OPCIÓN 1: COMPRAR CON PUNTOS */}
+            <TouchableOpacity
+              className="w-full bg-yellow-500 py-4 rounded-xl mb-4 items-center flex-row justify-center active:bg-yellow-600 shadow-lg"
+              onPress={() => {
+                Alert.alert(
+                  'Próximamente',
+                  'Acá le restaremos los puntos al usuario en la BD y le liberaremos la categoría de por vida.',
+                );
+                setIsLockedModalVisible(false);
+              }}
+            >
+              <Text className="text-slate-900 font-extrabold text-lg">
+                Desbloquear por 500 pts
+              </Text>
+            </TouchableOpacity>
+
+            {/* OPCIÓN 2: PASARSE A PLUS */}
+            <TouchableOpacity
+              className="w-full bg-fuchsia-600 py-4 rounded-xl mb-6 items-center active:bg-fuchsia-700 shadow-lg"
+              onPress={() => {
+                Alert.alert(
+                  'Próximamente',
+                  'Pantalla de pasarela de pagos / Suscripción.',
+                );
+                setIsLockedModalVisible(false);
+              }}
+            >
+              <Text className="text-white font-extrabold text-lg tracking-wide">
+                🔥 Hacerme Plus
+              </Text>
+            </TouchableOpacity>
+
+            {/* CANCELAR */}
+            <TouchableOpacity
+              className="mt-2"
+              onPress={() => setIsLockedModalVisible(false)}
+            >
+              <Text className="text-slate-500 font-bold text-base underline">
+                Volver atrás
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
