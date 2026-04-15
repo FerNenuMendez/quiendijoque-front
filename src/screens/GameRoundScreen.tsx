@@ -36,7 +36,7 @@ export default function GameRoundScreen() {
 
   // Estados del timer
   const [timeLeft, setTimeLeft] = useState(10);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Estados visuales de la respuesta
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
