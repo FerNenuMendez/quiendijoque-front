@@ -94,7 +94,7 @@ export default function CreateGameScreen() {
       <View className="flex-row items-center mb-8">
         <TouchableOpacity
           className="w-12 h-12 bg-slate-800 rounded-full items-center justify-center mr-4 active:bg-slate-700 border border-slate-700"
-          onPress={() => navigation.goBack()}
+          onPress={() => navigation.navigate('Home')}
         >
           <Text className="text-white text-2xl font-bold">←</Text>
         </TouchableOpacity>

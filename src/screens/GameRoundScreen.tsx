@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -25,21 +25,27 @@ interface Question {
 export default function GameRoundScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { categoryId } = route.params; // Recibimos el ID desde la pantalla anterior
+  const { categoryId } = route.params;
 
   // Estados del juego
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isFinished, setIsFinished] = useState(false); // 🔥 Nuevo estado para el final
+  const [isFinished, setIsFinished] = useState(false);
+
+  // Estados del timer
+  const [timeLeft, setTimeLeft] = useState(10);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Estados visuales de la respuesta
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [correctAuthorId, setCorrectAuthorId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
-  // Traer la ronda de preguntas al entrar
+  // ====================================================================
+  // 1. Traer la ronda de preguntas al entrar
+  // ====================================================================
   useEffect(() => {
     const fetchRound = async () => {
       try {
@@ -48,7 +54,7 @@ export default function GameRoundScreen() {
       } catch (error) {
         console.error('Error trayendo la ronda:', error);
         Alert.alert('Error', 'No se pudo generar la ronda.');
-        navigation.goBack();
+        navigation.navigate('CreateGame'); // Volvemos a categorías si falla
       } finally {
         setIsLoading(false);
       }
@@ -57,10 +63,48 @@ export default function GameRoundScreen() {
     fetchRound();
   }, [categoryId]);
 
-  // Manejar cuando el jugador toca una opción
+  // ====================================================================
+  // 2. Lógica del Contador de 10 Segundos (El motor del reloj)
+  // ====================================================================
+  useEffect(() => {
+    // Si la app está cargando, revisando respuesta, o ya terminó, frenamos el reloj
+    if (isChecking || isFinished || isLoading || questions.length === 0) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+
+    timerRef.current = setInterval(() => {
+      // Simplemente restamos 1. Nunca bajamos de 0.
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    // Cleanup para cuando se desmonta el componente
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isChecking, isFinished, isLoading, questions.length]);
+
+  // ====================================================================
+  // 3. El Vigilante del Tiempo (Dispara el evento al llegar a 0)
+  // ====================================================================
+  useEffect(() => {
+    // Si el tiempo es 0 y todavía no estamos chequeando otra respuesta...
+    if (timeLeft === 0 && !isChecking && !isFinished) {
+      handleTimeOut();
+    }
+  }, [timeLeft, isChecking, isFinished]);
+
+  // ====================================================================
+  // 4. Funciones de acción
+  // ====================================================================
+  const handleTimeOut = () => {
+    // Le pasamos un flag especial para que cuente como error
+    handleSelectOption('TIME_OUT');
+  };
+
   const handleSelectOption = async (authorId: string) => {
-    // Si ya estamos validando, no dejamos que toque de nuevo
     if (isChecking) return;
+    if (timerRef.current) clearInterval(timerRef.current); // Frenamos el reloj al toque
 
     setIsChecking(true);
     setSelectedAuthorId(authorId);
@@ -68,10 +112,13 @@ export default function GameRoundScreen() {
     const currentQuestion = questions[currentIndex];
 
     try {
-      // Le preguntamos a tu backend si es correcta
+      // Si el tiempo se acabó, mandamos un MongoID inválido ('0' repetido 24 veces) para forzar el error
+      const idToValidate =
+        authorId === 'TIME_OUT' ? '000000000000000000000000' : authorId;
+
       const response = await apiClient.post('/game/answer', {
         quoteId: currentQuestion.quoteId,
-        selectedAuthorId: authorId,
+        selectedAuthorId: idToValidate,
       });
 
       const { isCorrect, correctAuthorId: actualCorrectId } = response.data;
@@ -79,23 +126,24 @@ export default function GameRoundScreen() {
       setCorrectAuthorId(actualCorrectId);
       if (isCorrect) setScore((prev) => prev + 10);
 
-      // 🔥 Esperamos 1.5 segundos (ahora es async para poder pegarle a tu API)
+      // Esperamos 1.5 segundos para mostrar el feedback visual
       setTimeout(async () => {
         if (currentIndex < questions.length - 1) {
-          // Pasamos a la siguiente
+          // Siguiente pregunta
           setCurrentIndex((prev) => prev + 1);
           setSelectedAuthorId(null);
           setCorrectAuthorId(null);
+          setTimeLeft(10); // 🔥 Reiniciamos el reloj para la próxima frase
           setIsChecking(false);
         } else {
-          // TERMINÓ EL JUEGO: Mandamos los puntos al backend
+          // TERMINÓ EL JUEGO: Guardamos y mostramos pantalla final
           setIsLoading(true);
           const finalScore = score + (isCorrect ? 10 : 0);
 
           try {
             await apiClient.patch('/users/me/score', { points: finalScore });
-            setScore(finalScore); // Actualizamos el score final localmente
-            setIsFinished(true); // Mostramos la pantalla de victoria
+            setScore(finalScore);
+            setIsFinished(true);
           } catch (error) {
             console.error('Error guardando puntos:', error);
             Alert.alert(
@@ -103,7 +151,7 @@ export default function GameRoundScreen() {
               'No se pudieron guardar tus puntos por un error de red.',
             );
             setScore(finalScore);
-            setIsFinished(true); // Mostramos el final igual para que no se trabe
+            setIsFinished(true);
           } finally {
             setIsLoading(false);
           }
@@ -117,7 +165,9 @@ export default function GameRoundScreen() {
     }
   };
 
-  // Pantalla de carga
+  // ====================================================================
+  // PANTALLAS DE CARGA Y VICTORIA
+  // ====================================================================
   if (isLoading) {
     return (
       <View className="flex-1 bg-slate-900 justify-center items-center">
@@ -127,9 +177,6 @@ export default function GameRoundScreen() {
     );
   }
 
-  // ====================================================================
-  // 🔥 PANTALLA DE VICTORIA (Renderizado Condicional)
-  // ====================================================================
   if (isFinished) {
     return (
       <View className="flex-1 bg-slate-900 justify-center items-center px-8">
@@ -164,16 +211,16 @@ export default function GameRoundScreen() {
   }
 
   // ====================================================================
-  // PANTALLA DE JUEGO (Principal)
+  // PANTALLA DE JUEGO PRINCIPAL
   // ====================================================================
   const currentQuestion = questions[currentIndex];
 
   return (
     <View className="flex-1 bg-slate-900 px-6 pt-16 pb-8">
-      {/* HEADER: Botón salir, Contador y Puntaje */}
+      {/* HEADER: Botón salir, Contador Visual y Puntaje */}
       <View className="flex-row justify-between items-center mb-10">
         <TouchableOpacity
-          className="bg-slate-800 p-3 rounded-full border border-slate-700"
+          className="bg-slate-800 w-12 h-12 rounded-full items-center justify-center border border-slate-700"
           onPress={() => {
             Alert.alert(
               '¿Salir de la partida?',
@@ -182,7 +229,7 @@ export default function GameRoundScreen() {
                 { text: 'Cancelar', style: 'cancel' },
                 {
                   text: 'Salir',
-                  onPress: () => navigation.goBack(),
+                  onPress: () => navigation.navigate('CreateGame'),
                   style: 'destructive',
                 },
               ],
@@ -192,23 +239,42 @@ export default function GameRoundScreen() {
           <Text className="text-white font-bold">X</Text>
         </TouchableOpacity>
 
-        <Text className="text-slate-400 font-bold text-lg">
-          {currentIndex + 1} / {questions.length}
-        </Text>
+        {/* 🔥 TIMER VISUAL en el centro */}
+        <View
+          className={`w-14 h-14 rounded-full items-center justify-center border-4 ${timeLeft <= 3 ? 'border-red-500 bg-red-500/10' : 'border-fuchsia-500 bg-fuchsia-500/10'}`}
+        >
+          <Text
+            className={`font-black text-xl ${timeLeft <= 3 ? 'text-red-500' : 'text-fuchsia-400'}`}
+          >
+            {timeLeft}
+          </Text>
+        </View>
 
         <View className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm">
           <Text className="text-slate-900 font-extrabold">{score} pts</Text>
         </View>
       </View>
 
+      {/* CONTADOR DE PREGUNTAS (1/10) */}
+      <Text className="text-slate-500 font-bold text-center mb-2 text-sm uppercase tracking-widest">
+        Pregunta {currentIndex + 1} de {questions.length}
+      </Text>
+
       {/* LA PREGUNTA (LA FRASE) */}
       <View className="flex-1 justify-center mb-8">
-        <Text className="text-fuchsia-400 font-bold text-xl text-center mb-4 uppercase tracking-widest">
+        <Text className="text-slate-400 font-medium text-lg text-center mb-4">
           ¿Quién dijo?
         </Text>
         <Text className="text-white text-4xl font-extrabold text-center leading-[50px]">
           "{currentQuestion?.text}"
         </Text>
+
+        {/* Mensajito extra si se acaba el tiempo */}
+        {isChecking && selectedAuthorId === 'TIME_OUT' && (
+          <Text className="text-red-500 text-center font-bold mt-6 text-lg">
+            ¡Se acabó el tiempo! ⏳
+          </Text>
+        )}
       </View>
 
       {/* LAS OPCIONES */}
@@ -218,11 +284,11 @@ export default function GameRoundScreen() {
 
           if (isChecking) {
             if (option.id === correctAuthorId) {
-              buttonStyle = 'bg-green-500 border-green-400';
+              buttonStyle = 'bg-green-500 border-green-400'; // La correcta siempre se pinta de verde
             } else if (option.id === selectedAuthorId) {
-              buttonStyle = 'bg-red-500 border-red-400';
+              buttonStyle = 'bg-red-500 border-red-400'; // La incorrecta elegida se pinta de rojo
             } else {
-              buttonStyle = 'bg-slate-800/50 border-slate-700/50 opacity-50';
+              buttonStyle = 'bg-slate-800/50 border-slate-700/50 opacity-50'; // El resto se apaga
             }
           }
 
