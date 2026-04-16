@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,88 @@ import {
   Alert,
   Modal,
   Pressable,
+  Animated, // 🔥 Importamos la magia
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
 
-// Definimos cómo luce la categoría que viene de tu MongoDB
+const AnimatedTouchableOpacity =
+  Animated.createAnimatedComponent(TouchableOpacity);
+
+// ====================================================================
+// 🔥 COMPONENTE: TARJETA ANIMADA DE CATEGORÍA
+// Maneja su propio Squishy Effect y su Entrada en Cascada
+// ====================================================================
+const CategoryCard = ({ category, uniqueId, index, style, onPress }: any) => {
+  // Motores de animación
+  const slideAnim = useRef(new Animated.Value(50)).current; // Arranca 50px más abajo
+  const fadeAnim = useRef(new Animated.Value(0)).current; // Arranca invisible (0)
+  const scaleAnim = useRef(new Animated.Value(1)).current; // Escala normal (1)
+
+  // 1. Entrada en Cascada (Staggered Slide-In) al montar el componente
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(index * 100), // 🔥 La magia: Espera 100ms * su posición en la lista
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [index, slideAnim, fadeAnim]);
+
+  // 2. Feedback Táctil Físico (Squishy Button)
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.92,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 3,
+      tension: 40,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <AnimatedTouchableOpacity
+      activeOpacity={1} // Anulamos el destello por defecto para que se luzca la escala
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={() => onPress(category, uniqueId)}
+      style={{
+        opacity: fadeAnim,
+        transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+      }}
+      className={`w-[48%] aspect-square ${style.color} rounded-3xl p-4 mb-4 justify-between items-start shadow-lg ${style.shadow}`}
+    >
+      <View className="bg-white/20 p-3 rounded-2xl flex-row justify-between w-full items-center">
+        <Text className="text-4xl">{style.icon}</Text>
+        {category.isLocked && (
+          <Text className="text-yellow-400 text-lg">🔒</Text>
+        )}
+      </View>
+      <Text className="text-white font-extrabold text-xl tracking-wide">
+        {category.name}
+      </Text>
+    </AnimatedTouchableOpacity>
+  );
+};
+
+// ====================================================================
+// PANTALLA PRINCIPAL
+// ====================================================================
 interface DBCategory {
   _id?: string;
   id?: string;
@@ -25,15 +102,15 @@ export default function CreateGameScreen() {
   const navigation = useNavigation<any>();
   const [categories, setCategories] = useState<DBCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Estados del Patovica
   const [isLockedModalVisible, setIsLockedModalVisible] = useState(false);
   const [selectedLockedCategory, setSelectedLockedCategory] =
     useState<any>(null);
 
-  // 1. Buscamos las categorías a tu backend ni bien carga la pantalla
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        // Asegurate de tener este endpoint en tu NestJS (ej: /categories)
         const response = await apiClient.get('/categories');
         setCategories(response.data);
       } catch (error) {
@@ -50,7 +127,6 @@ export default function CreateGameScreen() {
     fetchCategories();
   }, []);
 
-  // 2. Diccionario de Estilos: Le ponemos facha según el 'slug' que venga de Mongo
   const getCategoryStyle = (slug: string) => {
     switch (slug) {
       case 'rock':
@@ -78,7 +154,6 @@ export default function CreateGameScreen() {
           shadow: 'shadow-purple-900/50',
         };
       default:
-        // Estilo por defecto por si agregás categorías nuevas y te olvidás de ponerles ícono
         return {
           icon: '🎲',
           color: 'bg-slate-600',
@@ -87,16 +162,12 @@ export default function CreateGameScreen() {
     }
   };
 
-  // 3. Acción al tocar la categoría: Viajamos a la pantalla del juego con el ID
   const handleSelectCategory = (category: any, uniqueId: string) => {
-    // Si la categoría está bloqueada, levantamos el Modal
     if (category.isLocked) {
       setSelectedLockedCategory(category);
       setIsLockedModalVisible(true);
       return;
     }
-
-    // Si está libre, entra a jugar
     navigation.navigate('GameRound', { categoryId: uniqueId });
   };
 
@@ -145,28 +216,20 @@ export default function CreateGameScreen() {
             const uniqueId = cat._id || cat.id || index.toString();
 
             return (
-              <TouchableOpacity
+              // 🔥 Llamamos al componente que armamos arriba
+              <CategoryCard
                 key={uniqueId}
-                className={`w-[48%] aspect-square ${style.color} rounded-3xl p-4 mb-4 justify-between items-start shadow-lg ${style.shadow} active:opacity-80`}
-                onPress={() => handleSelectCategory(cat, uniqueId)}
-              >
-                <View className="bg-white/20 p-3 rounded-2xl flex-row justify-between w-full items-center">
-                  <Text className="text-4xl">{style.icon}</Text>
-                  {/* Si está bloqueado, mostramos el candado */}
-                  {cat.isLocked && (
-                    <Text className="text-yellow-400 text-lg">🔒</Text>
-                  )}
-                </View>
-                <Text className="text-white font-extrabold text-xl tracking-wide">
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
+                category={cat}
+                uniqueId={uniqueId}
+                index={index}
+                style={style}
+                onPress={handleSelectCategory}
+              />
             );
           })}
         </View>
       )}
 
-      {/* ESPACIO FLEXIBLE */}
       <View className="flex-1" />
 
       {/* PLACEHOLDER PUBLICIDAD */}
@@ -175,6 +238,7 @@ export default function CreateGameScreen() {
           Espacio reservado para Google AdMob
         </Text>
       </View>
+
       {/* =========================================
           🔥 EL PATOVICA: MODAL DE CATEGORÍA BLOQUEADA
           ========================================= */}
@@ -204,13 +268,12 @@ export default function CreateGameScreen() {
               es exclusiva para usuarios Plus.
             </Text>
 
-            {/* OPCIÓN 1: COMPRAR CON PUNTOS */}
             <TouchableOpacity
               className="w-full bg-yellow-500 py-4 rounded-xl mb-4 items-center flex-row justify-center active:bg-yellow-600 shadow-lg"
               onPress={() => {
                 Alert.alert(
                   'Próximamente',
-                  'Acá le restaremos los puntos al usuario en la BD y le liberaremos la categoría de por vida.',
+                  'Acá le restaremos los puntos al usuario en la BD.',
                 );
                 setIsLockedModalVisible(false);
               }}
@@ -220,7 +283,6 @@ export default function CreateGameScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* OPCIÓN 2: PASARSE A PLUS */}
             <TouchableOpacity
               className="w-full bg-fuchsia-600 py-4 rounded-xl mb-6 items-center active:bg-fuchsia-700 shadow-lg"
               onPress={() => {
@@ -236,7 +298,6 @@ export default function CreateGameScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* CANCELAR */}
             <TouchableOpacity
               className="mt-2"
               onPress={() => setIsLockedModalVisible(false)}

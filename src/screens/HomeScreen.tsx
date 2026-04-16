@@ -1,14 +1,45 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, Modal, Pressable } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  Animated,
+} from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import { apiClient } from '../api/client'; // 🔥 Importamos el cliente para pegarle al backend
+
+const AnimatedTouchableOpacity =
+  Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function HomeScreen() {
   const navigation = useNavigation<any>();
   const [userName, setUserName] = useState('Jugador');
   const [points, setPoints] = useState(0); // 🔥 Estado para los puntos reales
   const [isMenuVisible, setIsMenuVisible] = useState(false);
+
+  // 🔥 3. EL EFECTO RESPIRACIÓN
+  const breatheAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Un bucle infinito que agranda a 1.05 y achica a 1 cada 1.5 segundos
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(breatheAnim, {
+          toValue: 1.03,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(breatheAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [breatheAnim]);
 
   // useFocusEffect se ejecuta cada vez que la pantalla vuelve a estar "en foco"
   useFocusEffect(
@@ -45,8 +76,8 @@ export default function HomeScreen() {
   // Función para cerrar sesión real
   const handleLogout = async () => {
     try {
-      await SecureStore.deleteItemAsync('user_session'); // Borramos los datos del usuario
-      await SecureStore.deleteItemAsync('access_token'); // 🔥 Borramos también el token de seguridad
+      await SecureStore.deleteItemAsync('user_session');
+      await SecureStore.deleteItemAsync('access_token');
       setIsMenuVisible(false);
       navigation.replace('Login');
     } catch (error) {
@@ -94,14 +125,15 @@ export default function HomeScreen() {
         </View>
 
         {/* BOTÓN PRINCIPAL */}
-        <TouchableOpacity
+        <AnimatedTouchableOpacity
+          style={{ transform: [{ scale: breatheAnim }] }}
           className="bg-fuchsia-600 py-5 px-8 w-full rounded-2xl active:bg-fuchsia-700 shadow-lg shadow-fuchsia-900/50"
           onPress={() => navigation.navigate('CreateGame')}
         >
           <Text className="text-center text-white font-extrabold text-xl tracking-wide">
             Crear Nueva Partida
           </Text>
-        </TouchableOpacity>
+        </AnimatedTouchableOpacity>
       </View>
 
       {/* PLACEHOLDER PUBLICIDAD */}

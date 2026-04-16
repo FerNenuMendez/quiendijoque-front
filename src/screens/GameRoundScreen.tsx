@@ -5,11 +5,16 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Animated,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
+import LottieView from 'lottie-react-native';
 
-// Las interfaces de lo que nos devuelve tu backend
+// Convertimos el TouchableOpacity en un componente animable
+const AnimatedTouchableOpacity =
+  Animated.createAnimatedComponent(TouchableOpacity);
+
 interface Option {
   id: string;
   name: string;
@@ -27,24 +32,89 @@ export default function GameRoundScreen() {
   const navigation = useNavigation<any>();
   const { categoryId } = route.params;
 
-  // Estados del juego
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Estados del timer
   const [timeLeft, setTimeLeft] = useState(10);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Estados visuales de la respuesta
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [correctAuthorId, setCorrectAuthorId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
 
   // ====================================================================
-  // 1. Traer la ronda de preguntas al entrar
+  // 🔥 MOTORES DE ANIMACIÓN
+  // ====================================================================
+  const scoreScale = useRef(new Animated.Value(1)).current;
+  const progressWidth = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  // Animación 1: Latido del puntaje
+  useEffect(() => {
+    if (score > 0) {
+      Animated.sequence([
+        Animated.timing(scoreScale, {
+          toValue: 1.3,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scoreScale, {
+          toValue: 1,
+          friction: 3,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [score]);
+
+  // Animación 2: Barra de progreso fluida
+  useEffect(() => {
+    if (questions.length > 0) {
+      Animated.timing(progressWidth, {
+        toValue: (currentIndex + 1) / questions.length,
+        duration: 400,
+        useNativeDriver: false, // El ancho (width) no puede usar native driver
+      }).start();
+    }
+  }, [currentIndex, questions.length]);
+
+  // Interpolación de la barra: Convierte de 0-1 a 0%-100%
+  const widthPercent = progressWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0%', '100%'],
+  });
+
+  // Función para disparar el "Shake" (temblor)
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: -10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 10,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shakeAnim, {
+        toValue: 0,
+        duration: 50,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // ====================================================================
+  // FETCH DE PREGUNTAS
   // ====================================================================
   useEffect(() => {
     const fetchRound = async () => {
@@ -52,59 +122,49 @@ export default function GameRoundScreen() {
         const response = await apiClient.get(`/game/round/${categoryId}`);
         setQuestions(response.data.questions);
       } catch (error) {
-        console.error('Error trayendo la ronda:', error);
         Alert.alert('Error', 'No se pudo generar la ronda.');
-        navigation.navigate('CreateGame'); // Volvemos a categorías si falla
+        navigation.navigate('CreateGame');
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchRound();
   }, [categoryId]);
 
   // ====================================================================
-  // 2. Lógica del Contador de 10 Segundos (El motor del reloj)
+  // LÓGICA DEL CONTADOR (Dividida en 2 pasos)
   // ====================================================================
   useEffect(() => {
-    // Si la app está cargando, revisando respuesta, o ya terminó, frenamos el reloj
     if (isChecking || isFinished || isLoading || questions.length === 0) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
     timerRef.current = setInterval(() => {
-      // Simplemente restamos 1. Nunca bajamos de 0.
       setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
-    // Cleanup para cuando se desmonta el componente
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isChecking, isFinished, isLoading, questions.length]);
 
-  // ====================================================================
-  // 3. El Vigilante del Tiempo (Dispara el evento al llegar a 0)
-  // ====================================================================
   useEffect(() => {
-    // Si el tiempo es 0 y todavía no estamos chequeando otra respuesta...
     if (timeLeft === 0 && !isChecking && !isFinished) {
       handleTimeOut();
     }
   }, [timeLeft, isChecking, isFinished]);
 
-  // ====================================================================
-  // 4. Funciones de acción
-  // ====================================================================
   const handleTimeOut = () => {
-    // Le pasamos un flag especial para que cuente como error
     handleSelectOption('TIME_OUT');
   };
 
+  // ====================================================================
+  // VALIDACIÓN DE RESPUESTA
+  // ====================================================================
   const handleSelectOption = async (authorId: string) => {
     if (isChecking) return;
-    if (timerRef.current) clearInterval(timerRef.current); // Frenamos el reloj al toque
+    if (timerRef.current) clearInterval(timerRef.current);
 
     setIsChecking(true);
     setSelectedAuthorId(authorId);
@@ -112,31 +172,30 @@ export default function GameRoundScreen() {
     const currentQuestion = questions[currentIndex];
 
     try {
-      // Si el tiempo se acabó, mandamos un MongoID inválido ('0' repetido 24 veces) para forzar el error
       const idToValidate =
         authorId === 'TIME_OUT' ? '000000000000000000000000' : authorId;
-
       const response = await apiClient.post('/game/answer', {
         quoteId: currentQuestion.quoteId,
         selectedAuthorId: idToValidate,
       });
 
       const { isCorrect, correctAuthorId: actualCorrectId } = response.data;
-
       setCorrectAuthorId(actualCorrectId);
-      if (isCorrect) setScore((prev) => prev + 10);
 
-      // Esperamos 1.5 segundos para mostrar el feedback visual
+      if (isCorrect) {
+        setScore((prev) => prev + 10); // El puntaje cambia y dispara el Latido
+      } else {
+        triggerShake(); // 🔥 Si es incorrecta, dispara el Temblor
+      }
+
       setTimeout(async () => {
         if (currentIndex < questions.length - 1) {
-          // Siguiente pregunta
-          setCurrentIndex((prev) => prev + 1);
+          setCurrentIndex((prev) => prev + 1); // Dispara la Barra de Progreso
           setSelectedAuthorId(null);
           setCorrectAuthorId(null);
-          setTimeLeft(10); // 🔥 Reiniciamos el reloj para la próxima frase
+          setTimeLeft(10);
           setIsChecking(false);
         } else {
-          // TERMINÓ EL JUEGO: Guardamos y mostramos pantalla final
           setIsLoading(true);
           const finalScore = score + (isCorrect ? 10 : 0);
 
@@ -145,11 +204,6 @@ export default function GameRoundScreen() {
             setScore(finalScore);
             setIsFinished(true);
           } catch (error) {
-            console.error('Error guardando puntos:', error);
-            Alert.alert(
-              'Aviso',
-              'No se pudieron guardar tus puntos por un error de red.',
-            );
             setScore(finalScore);
             setIsFinished(true);
           } finally {
@@ -158,7 +212,6 @@ export default function GameRoundScreen() {
         }
       }, 1500);
     } catch (error) {
-      console.error('Error validando respuesta:', error);
       Alert.alert('Error', 'Hubo un problema de conexión.');
       setIsChecking(false);
       setSelectedAuthorId(null);
@@ -166,7 +219,7 @@ export default function GameRoundScreen() {
   };
 
   // ====================================================================
-  // PANTALLAS DE CARGA Y VICTORIA
+  // PANTALLAS (CARGA Y VICTORIA)
   // ====================================================================
   if (isLoading) {
     return (
@@ -180,32 +233,44 @@ export default function GameRoundScreen() {
   if (isFinished) {
     return (
       <View className="flex-1 bg-slate-900 justify-center items-center px-8">
-        <Text className="text-6xl mb-6">🏆</Text>
-        <Text className="text-white text-3xl font-extrabold text-center mb-2">
-          ¡Ronda Terminada!
-        </Text>
-        <Text className="text-slate-400 text-xl text-center mb-10">
-          Sumaste <Text className="text-yellow-400 font-black">{score}</Text>{' '}
-          puntos
-        </Text>
-
-        <TouchableOpacity
-          className="bg-fuchsia-600 py-4 w-full rounded-2xl mb-4 shadow-lg shadow-fuchsia-900/50 active:bg-fuchsia-700"
-          onPress={() => navigation.replace('GameRound', { categoryId })}
-        >
-          <Text className="text-white text-center font-bold text-lg">
-            Jugar de nuevo
+        <LottieView
+          source={require('../../assets/animations/confetti.json')}
+          autoPlay
+          loop={false}
+          style={{
+            position: 'absolute',
+            width: '300%',
+            height: '300%',
+            zIndex: 0,
+            pointerEvents: 'none',
+          }}
+        />
+        <View className="items-center z-10 w-full">
+          <Text className="text-6xl mb-6">🏆</Text>
+          <Text className="text-white text-3xl font-extrabold text-center mb-2">
+            ¡Ronda Terminada!
           </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          className="bg-slate-800 py-4 w-full rounded-2xl border border-slate-700 active:bg-slate-700"
-          onPress={() => navigation.navigate('CreateGame')}
-        >
-          <Text className="text-slate-300 text-center font-bold text-lg">
-            Volver a Categorías
+          <Text className="text-slate-400 text-xl text-center mb-10">
+            Sumaste <Text className="text-yellow-400 font-black">{score}</Text>{' '}
+            puntos
           </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            className="bg-fuchsia-600 py-4 w-full rounded-2xl mb-4 shadow-lg shadow-fuchsia-900/50 active:bg-fuchsia-700"
+            onPress={() => navigation.replace('GameRound', { categoryId })}
+          >
+            <Text className="text-white text-center font-bold text-lg">
+              Jugar de nuevo
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="bg-slate-800 py-4 w-full rounded-2xl border border-slate-700 active:bg-slate-700"
+            onPress={() => navigation.navigate('CreateGame')}
+          >
+            <Text className="text-slate-300 text-center font-bold text-lg">
+              Volver a Categorías
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -217,31 +282,24 @@ export default function GameRoundScreen() {
 
   return (
     <View className="flex-1 bg-slate-900 px-6 pt-16 pb-6">
-      {/* HEADER: Botón salir, Contador Visual y Puntaje */}
-      {/* 🔥 Usamos relative y height fijo para contener al timer absoluto */}
-      <View className="relative flex-row justify-between items-center mb-10 h-14">
-        {/* BOTÓN X (Izquierda) */}
+      {/* HEADER */}
+      <View className="relative flex-row justify-between items-center mb-8 h-14">
         <TouchableOpacity
           className="bg-slate-800 w-12 h-12 rounded-full items-center justify-center border border-slate-700 z-10"
           onPress={() => {
-            Alert.alert(
-              '¿Salir de la partida?',
-              'Si salís ahora, perderás el progreso de esta ronda.',
-              [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                  text: 'Salir',
-                  onPress: () => navigation.navigate('CreateGame'),
-                  style: 'destructive',
-                },
-              ],
-            );
+            Alert.alert('¿Salir de la partida?', 'Perderás el progreso.', [
+              { text: 'Cancelar', style: 'cancel' },
+              {
+                text: 'Salir',
+                onPress: () => navigation.navigate('CreateGame'),
+                style: 'destructive',
+              },
+            ]);
           }}
         >
           <Text className="text-white font-bold">X</Text>
         </TouchableOpacity>
 
-        {/* 🔥 TIMER VISUAL (Clavado al centro en posición absoluta) */}
         <View className="absolute left-0 right-0 items-center pointer-events-none">
           <View
             className={`w-14 h-14 rounded-full items-center justify-center border-4 ${timeLeft <= 3 ? 'border-red-500 bg-red-500/10' : 'border-fuchsia-500 bg-fuchsia-500/10'}`}
@@ -254,19 +312,31 @@ export default function GameRoundScreen() {
           </View>
         </View>
 
-        {/* PUNTAJE (Derecha con ancho mínimo fijo) */}
-        <View className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm z-10 min-w-[75px] items-center">
+        {/* 🔥 PUNTAJE ANIMADO (Latido) */}
+        <Animated.View
+          style={{ transform: [{ scale: scoreScale }] }}
+          className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm z-10 min-w-[75px] items-center"
+        >
           <Text className="text-slate-900 font-extrabold">{score} pts</Text>
-        </View>
+        </Animated.View>
       </View>
 
-      {/* CONTADOR DE PREGUNTAS (1/10) */}
-      <Text className="text-slate-500 font-bold text-center mb-2 text-sm uppercase tracking-widest">
+      {/* 🔥 BARRA DE PROGRESO ANIMADA */}
+      <View className="w-full h-2 bg-slate-800 rounded-full mb-2 overflow-hidden">
+        <Animated.View
+          style={{
+            width: widthPercent,
+            height: '100%',
+            backgroundColor: '#d946ef', // fuchsia-500
+          }}
+        />
+      </View>
+      <Text className="text-slate-500 font-bold text-center mb-8 text-xs uppercase tracking-widest">
         Pregunta {currentIndex + 1} de {questions.length}
       </Text>
 
-      {/* LA PREGUNTA (LA FRASE) */}
-      <View className="justify-center mb-8 mt-4">
+      {/* LA PREGUNTA */}
+      <View className="justify-center mb-8">
         <Text className="text-slate-400 font-medium text-lg text-center mb-4">
           ¿Quién dijo?
         </Text>
@@ -285,22 +355,28 @@ export default function GameRoundScreen() {
       <View className="w-full">
         {currentQuestion?.options.map((option) => {
           let buttonStyle = 'bg-slate-800 border-slate-700';
+          let isSelectedAndWrong = false; // Flag para el temblor
 
           if (isChecking) {
             if (option.id === correctAuthorId) {
               buttonStyle = 'bg-green-500 border-green-400';
             } else if (option.id === selectedAuthorId) {
               buttonStyle = 'bg-red-500 border-red-400';
+              isSelectedAndWrong = true; // El usuario tocó esta y estaba mal
             } else {
               buttonStyle = 'bg-slate-800/50 border-slate-700/50 opacity-50';
             }
           }
 
           return (
-            <TouchableOpacity
+            // 🔥 BOTÓN ANIMADO (Temblor)
+            <AnimatedTouchableOpacity
               key={option.id}
               disabled={isChecking}
               onPress={() => handleSelectOption(option.id)}
+              style={{
+                transform: [{ translateX: isSelectedAndWrong ? shakeAnim : 0 }], // Aplica el shake solo al equivocado
+              }}
               className={`w-full py-5 px-6 rounded-2xl border-2 mb-4 flex-row items-center justify-between shadow-lg shadow-black/20 ${buttonStyle}`}
             >
               <Text
@@ -312,20 +388,15 @@ export default function GameRoundScreen() {
               {isChecking && option.id === correctAuthorId && (
                 <Text className="text-2xl">✅</Text>
               )}
-              {isChecking &&
-                option.id === selectedAuthorId &&
-                option.id !== correctAuthorId && (
-                  <Text className="text-2xl">❌</Text>
-                )}
-            </TouchableOpacity>
+              {isChecking && isSelectedAndWrong && (
+                <Text className="text-2xl">❌</Text>
+              )}
+            </AnimatedTouchableOpacity>
           );
         })}
       </View>
 
-      {/* 🔥 ESPACIADOR FLEXIBLE PARA EMPUJAR ADMOB AL FONDO */}
       <View className="flex-1" />
-
-      {/* 🔥 PLACEHOLDER PUBLICIDAD ADMOB */}
       <View className="w-full h-16 bg-slate-800/50 border border-slate-700 border-dashed rounded-xl items-center justify-center mt-4">
         <Text className="text-slate-500 font-medium">Espacio AdMob Banner</Text>
       </View>
