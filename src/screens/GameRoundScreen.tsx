@@ -232,20 +232,26 @@ export default function GameRoundScreen() {
 
   if (isFinished) {
     return (
-      <View className="flex-1 bg-slate-900 justify-center items-center px-8">
+      <View className="flex-1 bg-slate-900 px-6 pt-16 pb-8">
+        {/* 🔥 FIX DEL LOTTIE: Anclado a los 4 bordes y usando resizeMode */}
         <LottieView
           source={require('../../assets/animations/confetti.json')}
           autoPlay
           loop={false}
+          resizeMode="cover"
           style={{
             position: 'absolute',
-            width: '300%',
-            height: '300%',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
             zIndex: 0,
             pointerEvents: 'none',
           }}
         />
-        <View className="items-center z-10 w-full">
+
+        {/* CONTENEDOR CENTRAL: Botones y Puntos */}
+        <View className="flex-1 items-center justify-center z-10 w-full">
           <Text className="text-6xl mb-6">🏆</Text>
           <Text className="text-white text-3xl font-extrabold text-center mb-2">
             ¡Ronda Terminada!
@@ -254,6 +260,7 @@ export default function GameRoundScreen() {
             Sumaste <Text className="text-yellow-400 font-black">{score}</Text>{' '}
             puntos
           </Text>
+
           <TouchableOpacity
             className="bg-fuchsia-600 py-4 w-full rounded-2xl mb-4 shadow-lg shadow-fuchsia-900/50 active:bg-fuchsia-700"
             onPress={() => navigation.replace('GameRound', { categoryId })}
@@ -262,6 +269,7 @@ export default function GameRoundScreen() {
               Jugar de nuevo
             </Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             className="bg-slate-800 py-4 w-full rounded-2xl border border-slate-700 active:bg-slate-700"
             onPress={() => navigation.navigate('CreateGame')}
@@ -270,6 +278,13 @@ export default function GameRoundScreen() {
               Volver a Categorías
             </Text>
           </TouchableOpacity>
+        </View>
+
+        {/* PLACEHOLDER PUBLICIDAD: Clavado al fondo */}
+        <View className="w-full bg-slate-800 border border-slate-700 rounded-xl h-24 items-center justify-center border-dashed mt-6 z-10">
+          <Text className="text-slate-500 font-medium text-center px-4">
+            Espacio reservado para Google AdMob
+          </Text>
         </View>
       </View>
     );

@@ -7,7 +7,7 @@ import {
   Alert,
   Modal,
   Pressable,
-  Animated, // 🔥 Importamos la magia
+  Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
@@ -16,19 +16,16 @@ const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity);
 
 // ====================================================================
-// 🔥 COMPONENTE: TARJETA ANIMADA DE CATEGORÍA
-// Maneja su propio Squishy Effect y su Entrada en Cascada
+// COMPONENTE: TARJETA ANIMADA DE CATEGORÍA
 // ====================================================================
 const CategoryCard = ({ category, uniqueId, index, style, onPress }: any) => {
-  // Motores de animación
-  const slideAnim = useRef(new Animated.Value(50)).current; // Arranca 50px más abajo
-  const fadeAnim = useRef(new Animated.Value(0)).current; // Arranca invisible (0)
-  const scaleAnim = useRef(new Animated.Value(1)).current; // Escala normal (1)
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  // 1. Entrada en Cascada (Staggered Slide-In) al montar el componente
   useEffect(() => {
     Animated.sequence([
-      Animated.delay(index * 100), // 🔥 La magia: Espera 100ms * su posición en la lista
+      Animated.delay(index * 100),
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
@@ -44,7 +41,6 @@ const CategoryCard = ({ category, uniqueId, index, style, onPress }: any) => {
     ]).start();
   }, [index, slideAnim, fadeAnim]);
 
-  // 2. Feedback Táctil Físico (Squishy Button)
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
       toValue: 0.92,
@@ -63,7 +59,7 @@ const CategoryCard = ({ category, uniqueId, index, style, onPress }: any) => {
 
   return (
     <AnimatedTouchableOpacity
-      activeOpacity={1} // Anulamos el destello por defecto para que se luzca la escala
+      activeOpacity={1}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={() => onPress(category, uniqueId)}
@@ -103,27 +99,29 @@ export default function CreateGameScreen() {
   const [categories, setCategories] = useState<DBCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Estados del Patovica
+  // Estados del Patovica y la Compra
   const [isLockedModalVisible, setIsLockedModalVisible] = useState(false);
   const [selectedLockedCategory, setSelectedLockedCategory] =
     useState<any>(null);
+  const [isBuying, setIsBuying] = useState(false); // 🔥 Nuevo estado para la carga de compra
+
+  // 🔥 Sacamos la función afuera para poder reutilizarla
+  const fetchCategories = async () => {
+    try {
+      const response = await apiClient.get('/categories');
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error al traer categorías:', error);
+      Alert.alert(
+        'Error',
+        'No pudimos cargar las categorías. Intentá de nuevo.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await apiClient.get('/categories');
-        setCategories(response.data);
-      } catch (error) {
-        console.error('Error al traer categorías:', error);
-        Alert.alert(
-          'Error',
-          'No pudimos cargar las categorías. Intentá de nuevo.',
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchCategories();
   }, []);
 
@@ -171,6 +169,45 @@ export default function CreateGameScreen() {
     navigation.navigate('GameRound', { categoryId: uniqueId });
   };
 
+  // ====================================================================
+  // 🔥 LÓGICA DE COMPRA DE CATEGORÍA
+  // ====================================================================
+  const handleBuyCategory = async () => {
+    if (!selectedLockedCategory) return;
+
+    setIsBuying(true);
+    const categoryId = selectedLockedCategory._id || selectedLockedCategory.id;
+
+    try {
+      // Le pegamos al nuevo endpoint de NestJS
+      const response = await apiClient.post('/users/me/unlock', { categoryId });
+
+      // Cerramos el modal y avisamos que todo salió de 10
+      setIsLockedModalVisible(false);
+      Alert.alert(
+        '¡Excelente!',
+        'Categoría desbloqueada con éxito. ¡A jugar! 🎸',
+      );
+
+      // Recargamos las categorías para que el candado desaparezca
+      await fetchCategories();
+    } catch (error: any) {
+      // Atrapamos los errores que manda NestJS (ej: "No te alcanzan los puntos")
+      const errorMessage =
+        error.response?.data?.message ||
+        'Hubo un error al intentar comprar la categoría.';
+
+      // Si el mensaje es un array (NestJS a veces manda arrays en errores de validación), lo unimos
+      const finalMessage = Array.isArray(errorMessage)
+        ? errorMessage.join('\n')
+        : errorMessage;
+
+      Alert.alert('No se pudo desbloquear', finalMessage);
+    } finally {
+      setIsBuying(false);
+    }
+  };
+
   return (
     <View className="flex-1 bg-slate-900 px-6 pt-16 pb-8">
       {/* HEADER */}
@@ -216,7 +253,6 @@ export default function CreateGameScreen() {
             const uniqueId = cat._id || cat.id || index.toString();
 
             return (
-              // 🔥 Llamamos al componente que armamos arriba
               <CategoryCard
                 key={uniqueId}
                 category={cat}
@@ -246,11 +282,11 @@ export default function CreateGameScreen() {
         visible={isLockedModalVisible}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setIsLockedModalVisible(false)}
+        onRequestClose={() => !isBuying && setIsLockedModalVisible(false)} // No deja cerrar si está comprando
       >
         <Pressable
           className="flex-1 bg-black/80 justify-center items-center px-6"
-          onPress={() => setIsLockedModalVisible(false)}
+          onPress={() => !isBuying && setIsLockedModalVisible(false)}
         >
           <Pressable className="bg-slate-800 w-full p-8 rounded-3xl items-center border border-slate-700 shadow-2xl">
             <View className="bg-slate-700 w-20 h-20 rounded-full items-center justify-center mb-6 border-4 border-slate-600">
@@ -268,23 +304,25 @@ export default function CreateGameScreen() {
               es exclusiva para usuarios Plus.
             </Text>
 
+            {/* 🔥 OPCIÓN 1: COMPRAR CON PUNTOS (CONECTADA AL BACKEND) */}
             <TouchableOpacity
-              className="w-full bg-yellow-500 py-4 rounded-xl mb-4 items-center flex-row justify-center active:bg-yellow-600 shadow-lg"
-              onPress={() => {
-                Alert.alert(
-                  'Próximamente',
-                  'Acá le restaremos los puntos al usuario en la BD.',
-                );
-                setIsLockedModalVisible(false);
-              }}
+              disabled={isBuying}
+              className={`w-full py-4 rounded-xl mb-4 items-center flex-row justify-center shadow-lg ${isBuying ? 'bg-yellow-600/50' : 'bg-yellow-500 active:bg-yellow-600'}`}
+              onPress={handleBuyCategory}
             >
-              <Text className="text-slate-900 font-extrabold text-lg">
-                Desbloquear por 500 pts
-              </Text>
+              {isBuying ? (
+                <ActivityIndicator color="#0f172a" /> // slate-900
+              ) : (
+                <Text className="text-slate-900 font-extrabold text-lg">
+                  Desbloquear por 500 pts
+                </Text>
+              )}
             </TouchableOpacity>
 
+            {/* OPCIÓN 2: PASARSE A PLUS */}
             <TouchableOpacity
-              className="w-full bg-fuchsia-600 py-4 rounded-xl mb-6 items-center active:bg-fuchsia-700 shadow-lg"
+              disabled={isBuying}
+              className={`w-full py-4 rounded-xl mb-6 items-center shadow-lg ${isBuying ? 'bg-fuchsia-800/50' : 'bg-fuchsia-600 active:bg-fuchsia-700'}`}
               onPress={() => {
                 Alert.alert(
                   'Próximamente',
@@ -298,7 +336,9 @@ export default function CreateGameScreen() {
               </Text>
             </TouchableOpacity>
 
+            {/* CANCELAR */}
             <TouchableOpacity
+              disabled={isBuying}
               className="mt-2"
               onPress={() => setIsLockedModalVisible(false)}
             >
