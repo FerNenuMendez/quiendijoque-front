@@ -3,16 +3,15 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import * as SecureStore from 'expo-secure-store'; // 🔥 Actualizado a SecureStore
-
+import * as SecureStore from 'expo-secure-store';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
-
-// 🔥 Importamos las pantallas nuevas del juego
 import CreateGameScreen from './src/screens/CreateGameScreen';
 import GameRoundScreen from './src/screens/GameRoundScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -63,6 +62,8 @@ export default function App() {
         {/* 🔥 Registramos las nuevas pantallas en el mapa */}
         <Stack.Screen name="CreateGame" component={CreateGameScreen} />
         <Stack.Screen name="GameRound" component={GameRoundScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Settings" component={SettingsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
