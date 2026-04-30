@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
+import { audioService } from '../services/AudioService';
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
@@ -24,8 +25,25 @@ export default function SettingsScreen() {
   const [passwords, setPasswords] = useState({ old: '', new: '' });
   const [isSavingPass, setIsSavingPass] = useState(false);
 
-  // 🔥 Estado para Modal de Términos
+  // Estado para Modal de Términos
   const [isTermsModalVisible, setIsTermsModalVisible] = useState(false);
+
+  // 🔥 1. Sincronizamos los switches con el estado real del servicio al abrir la pantalla
+  useEffect(() => {
+    setIsSoundEnabled(audioService.isSoundEnabled);
+    setIsVibrationEnabled(audioService.isVibrationEnabled);
+  }, []);
+
+  // 🔥 2. Funciones que controlan la UI y le avisan al servicio global
+  const handleToggleSound = async (value: boolean) => {
+    setIsSoundEnabled(value); // Movemos el switch visualmente al instante
+    await audioService.toggleSound(value); // El cerebro global apaga/prende el audio y lo guarda
+  };
+
+  const handleToggleVibration = async (value: boolean) => {
+    setIsVibrationEnabled(value); // Movemos el switch
+    await audioService.toggleVibration(value); // El cerebro global guarda la preferencia
+  };
 
   const handleChangePassword = async () => {
     if (passwords.new.length < 6) {
@@ -104,13 +122,13 @@ export default function SettingsScreen() {
           label="Efectos de Sonido"
           icon="🔊"
           value={isSoundEnabled}
-          onValueChange={setIsSoundEnabled}
+          onValueChange={handleToggleSound} // 🔥 Conectado al nuevo handler
         />
         <SettingRow
           label="Vibración Háptica"
           icon="📳"
           value={isVibrationEnabled}
-          onValueChange={setIsVibrationEnabled}
+          onValueChange={handleToggleVibration} // 🔥 Conectado al nuevo handler
         />
 
         {/* SECCIÓN CUENTA */}
@@ -129,7 +147,6 @@ export default function SettingsScreen() {
           Acerca de
         </Text>
 
-        {/* 🔥 BOTÓN QUE ABRE LOS TÉRMINOS */}
         <TouchableOpacity
           className="bg-slate-800 p-4 rounded-2xl mb-3 border border-slate-700"
           onPress={() => setIsTermsModalVisible(true)}

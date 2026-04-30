@@ -8,6 +8,7 @@ import {
   Modal,
   Pressable,
   Animated,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
@@ -178,7 +179,7 @@ export default function CreateGameScreen() {
     const categoryId = selectedLockedCategory._id || selectedLockedCategory.id;
 
     try {
-      const response = await apiClient.post('/users/me/unlock', { categoryId });
+      await apiClient.post('/users/me/unlock', { categoryId });
       setIsLockedModalVisible(false);
       Alert.alert(
         '¡Excelente!',
@@ -189,11 +190,9 @@ export default function CreateGameScreen() {
       const errorMessage =
         error.response?.data?.message ||
         'Hubo un error al intentar comprar la categoría.';
-
       const finalMessage = Array.isArray(errorMessage)
         ? errorMessage.join('\n')
         : errorMessage;
-
       Alert.alert('No se pudo desbloquear', finalMessage);
     } finally {
       setIsBuying(false);
@@ -201,74 +200,81 @@ export default function CreateGameScreen() {
   };
 
   return (
-    <View className="flex-1 bg-slate-900 px-6 pt-16 pb-8">
-      {/* HEADER */}
-      <View className="flex-row items-center mb-8">
-        <TouchableOpacity
-          className="w-12 h-12 bg-slate-800 rounded-full items-center justify-center mr-4 active:bg-slate-700 border border-slate-700"
-          onPress={() => navigation.navigate('Home')}
-        >
-          <Text className="text-white text-2xl font-bold">←</Text>
-        </TouchableOpacity>
-        <Text className="text-3xl font-extrabold text-white flex-1">
-          Nueva Partida
-        </Text>
-      </View>
-
-      {/* 🔥 TARJETA DE EXPLICACIÓN ACTUALIZADA */}
-      <View className="bg-slate-800 p-6 rounded-3xl mb-8 border border-slate-700 shadow-lg shadow-black/40">
-        <Text className="text-xl font-bold text-white mb-2">
-          ¿Cómo se juega?
-        </Text>
-        <Text className="text-slate-400 text-base leading-6">
-          Elegí un tema y adiviná{' '}
-          <Text className="text-white font-bold">¿Quién Dijo Qué?</Text>. Sumás
-          puntos por cada acierto, pero atención: ¡Si metés{' '}
-          <Text className="text-orange-400 font-bold">
-            3 correctas seguidas
+    // 🔥 CONTENEDOR PRINCIPAL (sin padding horizontal, lo maneja el ScrollView)
+    <View className="flex-1 bg-slate-900 pt-16">
+      {/* 🔥 SCROLLVIEW PARA EL CONTENIDO */}
+      <ScrollView className="flex-1 px-6" showsVerticalScrollIndicator={false}>
+        {/* HEADER */}
+        <View className="flex-row items-center mb-8">
+          <TouchableOpacity
+            className="w-12 h-12 bg-slate-800 rounded-full items-center justify-center mr-4 active:bg-slate-700 border border-slate-700"
+            onPress={() => navigation.navigate('Home')}
+          >
+            <Text className="text-white text-2xl font-bold">←</Text>
+          </TouchableOpacity>
+          <Text className="text-3xl font-extrabold text-white flex-1">
+            Nueva Partida
           </Text>
-          , activás el multiplicador y ganás el{' '}
-          <Text className="text-white font-bold">doble de puntos</Text>!
-        </Text>
-      </View>
-
-      <Text className="text-slate-300 text-lg font-bold mb-4 px-1">
-        Seleccioná una categoría:
-      </Text>
-
-      {/* GRILLA O SPINNER DE CARGA */}
-      {isLoading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#d946ef" />
-          <Text className="text-slate-400 mt-4">Cargando categorías...</Text>
         </View>
-      ) : (
-        <View className="flex-row flex-wrap justify-between w-full">
-          {categories.map((cat, index) => {
-            const style = getCategoryStyle(cat.slug);
-            const uniqueId = cat._id || cat.id || index.toString();
 
-            return (
-              <CategoryCard
-                key={uniqueId}
-                category={cat}
-                uniqueId={uniqueId}
-                index={index}
-                style={style}
-                onPress={handleSelectCategory}
-              />
-            );
-          })}
+        {/* TARJETA DE EXPLICACIÓN */}
+        <View className="bg-slate-800 p-6 rounded-3xl mb-8 border border-slate-700 shadow-lg shadow-black/40">
+          <Text className="text-xl font-bold text-white mb-2">
+            ¿Cómo se juega?
+          </Text>
+          <Text className="text-slate-400 text-base leading-6">
+            Elegí un tema y adiviná{' '}
+            <Text className="text-white font-bold">¿Quién Dijo Qué?</Text>.
+            Sumás puntos por cada acierto, pero atención: ¡Si metés{' '}
+            <Text className="text-orange-400 font-bold">
+              3 correctas seguidas
+            </Text>
+            , activás el multiplicador y ganás el{' '}
+            <Text className="text-white font-bold">doble de puntos</Text>!
+          </Text>
         </View>
-      )}
 
-      <View className="flex-1" />
-
-      {/* PLACEHOLDER PUBLICIDAD */}
-      <View className="bg-slate-800 border border-slate-700 rounded-xl h-24 items-center justify-center border-dashed mt-6">
-        <Text className="text-slate-500 font-medium text-center px-4">
-          Espacio reservado para Google AdMob
+        <Text className="text-slate-300 text-lg font-bold mb-4 px-1">
+          Seleccioná una categoría:
         </Text>
+
+        {/* GRILLA O SPINNER DE CARGA */}
+        {isLoading ? (
+          <View className="flex-1 justify-center items-center py-10">
+            <ActivityIndicator size="large" color="#d946ef" />
+            <Text className="text-slate-400 mt-4">Cargando categorías...</Text>
+          </View>
+        ) : (
+          <View className="flex-row flex-wrap justify-between w-full">
+            {categories.map((cat, index) => {
+              const style = getCategoryStyle(cat.slug);
+              const uniqueId = cat._id || cat.id || index.toString();
+
+              return (
+                <CategoryCard
+                  key={uniqueId}
+                  category={cat}
+                  uniqueId={uniqueId}
+                  index={index}
+                  style={style}
+                  onPress={handleSelectCategory}
+                />
+              );
+            })}
+          </View>
+        )}
+
+        {/* Espaciador final para que las tarjetas no queden pegadas al banner al scrollear */}
+        <View className="h-6" />
+      </ScrollView>
+
+      {/* 🔥 BANNER FIJO AL FONDO DE LA PANTALLA */}
+      <View className="px-6 pb-8 pt-4 bg-slate-900 border-t border-slate-800/50">
+        <View className="w-full bg-slate-800 border border-slate-700 rounded-xl h-24 items-center justify-center border-dashed">
+          <Text className="text-slate-500 font-medium text-center px-4">
+            Espacio reservado para Google AdMob
+          </Text>
+        </View>
       </View>
 
       {/* =========================================

@@ -9,7 +9,10 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
+import { Audio } from 'expo-av';
+import * as Haptics from 'expo-haptics';
 import LottieView from 'lottie-react-native';
+import { audioService } from '../services/AudioService';
 
 const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity);
@@ -34,7 +37,6 @@ export default function GameRoundScreen() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
-  // 🔥 ESTADOS NUEVOS: Racha, Multiplicador y Ref para el puntaje (evita bugs en el setTimeout)
   const [score, setScore] = useState(0);
   const scoreRef = useRef(0);
   const [streak, setStreak] = useState(0);
@@ -49,6 +51,8 @@ export default function GameRoundScreen() {
   const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
   const [correctAuthorId, setCorrectAuthorId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   // ====================================================================
   // MOTORES DE ANIMACIÓN
@@ -75,6 +79,50 @@ export default function GameRoundScreen() {
   }, [score]);
 
   useEffect(() => {
+    return sound
+      ? () => {
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
+
+  // 🔥 Motor de Sonido
+  const playSound = async (type: 'correct' | 'wrong' | 'win' | 'level') => {
+    // 🛑 VÁLVULA DE CORTE: Si el sonido está desactivado en ajustes, no hace nada
+    if (!audioService.isSoundEnabled) return;
+
+    try {
+      let soundSource;
+      if (type === 'correct')
+        soundSource = require('../../assets/sounds/correcto.mp3');
+      else if (type === 'wrong')
+        soundSource = require('../../assets/sounds/error.mp3');
+      else if (type === 'win')
+        soundSource = require('../../assets/sounds/aplausos.mp3');
+      else if (type === 'level')
+        soundSource = require('../../assets/sounds/levelUp.mp3');
+
+      const { sound: newSound } = await Audio.Sound.createAsync(soundSource);
+      setSound(newSound);
+      await newSound.playAsync();
+    } catch (error) {
+      console.log('Error reproduciendo sonido:', error);
+    }
+  };
+
+  // 🔥 Motor de Vibración (Haptics)
+  const triggerHaptic = (type: 'success' | 'error') => {
+    // 🛑 VÁLVULA DE CORTE: Si la vibración está desactivada en ajustes, no hace nada
+    if (!audioService.isVibrationEnabled) return;
+
+    if (type === 'success') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+  };
+
+  useEffect(() => {
     if (questions.length > 0) {
       Animated.timing(progressWidth, {
         toValue: (currentIndex + 1) / questions.length,
@@ -83,6 +131,19 @@ export default function GameRoundScreen() {
       }).start();
     }
   }, [currentIndex, questions.length]);
+
+  // GESTOR DE MÚSICA DE FONDO
+  useEffect(() => {
+    // 1. Al entrar a la ronda: Apagamos Lobby, prendemos Tic-Tac
+    audioService.stopLobby();
+    audioService.playTicTac();
+
+    // 2. Al "desmontar" la pantalla (cuando toca la X o se va para atrás):
+    return () => {
+      audioService.stopTicTac();
+      audioService.playLobby();
+    };
+  }, []);
 
   const widthPercent = progressWidth.interpolate({
     inputRange: [0, 1],
@@ -186,23 +247,29 @@ export default function GameRoundScreen() {
       let currentStreak = streak;
 
       if (isCorrect) {
+        triggerHaptic('success');
         currentStreak += 1;
         setStreak(currentStreak);
 
-        // 🔥 LÓGICA DEL MULTIPLICADOR (Racha >= 3 o antes de los 5 segundos)
-        const isSpeedBonus = timeLeft >= 8; // Si timeLeft es 6, 7, 8, 9 o 10
+        // LÓGICA DEL MULTIPLICADOR
+        const isSpeedBonus = timeLeft >= 8;
         let activeMultiplier = 1;
 
         if (currentStreak >= 3 || isSpeedBonus) {
           activeMultiplier = 2;
+          playSound('level');
+        } else {
+          playSound('correct');
         }
 
         setMultiplier(activeMultiplier);
 
         const earnedPoints = 10 * activeMultiplier;
-        scoreRef.current += earnedPoints; // Guardamos el puntaje real en el ref
-        setScore(scoreRef.current); // Actualizamos la UI
+        scoreRef.current += earnedPoints;
+        setScore(scoreRef.current);
       } else {
+        triggerHaptic('error');
+        playSound('wrong');
         triggerShake();
         setStreak(0);
         setMultiplier(1);
@@ -223,10 +290,10 @@ export default function GameRoundScreen() {
         } else {
           setIsLoading(true);
           try {
-            // Usamos scoreRef.current para evitar enviar un puntaje desactualizado
             await apiClient.patch('/users/me/score', {
               points: scoreRef.current,
             });
+
             setIsFinished(true);
           } catch (error) {
             setIsFinished(true);
@@ -241,6 +308,13 @@ export default function GameRoundScreen() {
       setSelectedAuthorId(null);
     }
   };
+
+  useEffect(() => {
+    if (isFinished) {
+      audioService.stopTicTac();
+      playSound('win');
+    }
+  }, [isFinished]);
 
   // ====================================================================
   // PANTALLAS (CARGA Y VICTORIA)
@@ -348,7 +422,7 @@ export default function GameRoundScreen() {
           </View>
         </View>
 
-        {/* 🔥 PUNTAJE ANIMADO CON ETIQUETA DE MULTIPLICADOR */}
+        {/* PUNTAJE ANIMADO CON ETIQUETA DE MULTIPLICADOR */}
         <View className="items-center z-10 relative">
           <Animated.View
             style={{ transform: [{ scale: scoreScale }] }}

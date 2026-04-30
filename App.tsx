@@ -13,6 +13,7 @@ import CreateGameScreen from './src/screens/CreateGameScreen';
 import GameRoundScreen from './src/screens/GameRoundScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import RankingScreen from './src/screens/Rankingscreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +72,7 @@ export default function App() {
         <Stack.Screen name="GameRound" component={GameRoundScreen} />
         <Stack.Screen name="Profile" component={ProfileScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
+        <Stack.Screen name="Ranking" component={RankingScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

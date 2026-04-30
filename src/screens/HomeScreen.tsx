@@ -17,6 +17,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import { apiClient } from '../api/client';
+import { audioService } from '../services/AudioService';
 
 const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity);
@@ -35,8 +36,8 @@ export default function HomeScreen() {
     Animated.loop(
       Animated.sequence([
         Animated.timing(breatheAnim, {
-          toValue: 1.03,
-          duration: 1500,
+          toValue: 1.08,
+          duration: 1000,
           useNativeDriver: true,
         }),
         Animated.timing(breatheAnim, {
@@ -47,6 +48,11 @@ export default function HomeScreen() {
       ]),
     ).start();
   }, [breatheAnim]);
+
+  // Prender música del Lobby al entrar al Home
+  useEffect(() => {
+    audioService.playLobby();
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -132,13 +138,27 @@ export default function HomeScreen() {
           </Text>
         </View>
 
+        {/* 🔥 BOTÓN PRINCIPAL */}
         <AnimatedTouchableOpacity
           style={{ transform: [{ scale: breatheAnim }] }}
-          className="bg-fuchsia-600 py-5 px-8 w-full rounded-2xl active:bg-fuchsia-700 shadow-lg shadow-fuchsia-900/50"
+          className="bg-fuchsia-600 py-5 px-8 w-full rounded-2xl active:bg-fuchsia-700 shadow-lg shadow-fuchsia-900/50 mb-4"
           onPress={() => navigation.navigate('CreateGame')}
         >
           <Text className="text-center text-white font-extrabold text-xl tracking-wide">
             Crear Nueva Partida
+          </Text>
+        </AnimatedTouchableOpacity>
+
+        {/* 🔥 NUEVO BOTÓN: RANKING GLOBAL */}
+        <AnimatedTouchableOpacity
+          style={{ transform: [{ scale: breatheAnim }] }}
+          className="bg-slate-800 py-4 w-full rounded-2xl border-2 border-slate-700 flex-row justify-center items-center shadow-lg shadow-black/40"
+          onPress={() => navigation.navigate('Ranking')}
+          activeOpacity={0.8}
+        >
+          <Text className="text-2xl mr-3">🏆</Text>
+          <Text className="text-slate-300 text-center font-extrabold text-lg tracking-widest uppercase">
+            Top Global
           </Text>
         </AnimatedTouchableOpacity>
       </View>
@@ -148,16 +168,6 @@ export default function HomeScreen() {
           Espacio reservado para Google AdMob
         </Text>
       </View>
-      {/* 💰 BANNER DE ADMOB 💰 */}
-      {/*<View className="items-center justify-center mt-6 w-full">
-        <BannerAd
-          unitId={TestIds.BANNER}
-          size={BannerAdSize.BANNER}
-          requestOptions={{
-            requestNonPersonalizedAdsOnly: true,
-          }}
-        />
-      </View>*/}
 
       {/* MODAL DEL MENÚ DE PERFIL */}
       <Modal
