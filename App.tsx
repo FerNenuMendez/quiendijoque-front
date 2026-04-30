@@ -1,5 +1,6 @@
 import './global.css';
 import React, { useEffect, useState } from 'react';
+import mobileAds from 'react-native-google-mobile-ads';
 import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -20,6 +21,12 @@ export default function App() {
   const [initialRoute, setInitialRoute] = useState('Login');
 
   useEffect(() => {
+    // Inicializamos el SDK de anuncios cuando la app carga por primera vez
+    //mobileAds()
+    //  .initialize()
+    //  .then((adapterStatuses) => {
+    //    console.log('AdMob Inicializado', adapterStatuses);
+    //  });
     // Revisamos si el celular tiene la sesión guardada
     const checkSession = async () => {
       try {

@@ -103,9 +103,8 @@ export default function CreateGameScreen() {
   const [isLockedModalVisible, setIsLockedModalVisible] = useState(false);
   const [selectedLockedCategory, setSelectedLockedCategory] =
     useState<any>(null);
-  const [isBuying, setIsBuying] = useState(false); // 🔥 Nuevo estado para la carga de compra
+  const [isBuying, setIsBuying] = useState(false);
 
-  // 🔥 Sacamos la función afuera para poder reutilizarla
   const fetchCategories = async () => {
     try {
       const response = await apiClient.get('/categories');
@@ -179,25 +178,18 @@ export default function CreateGameScreen() {
     const categoryId = selectedLockedCategory._id || selectedLockedCategory.id;
 
     try {
-      // Le pegamos al nuevo endpoint de NestJS
       const response = await apiClient.post('/users/me/unlock', { categoryId });
-
-      // Cerramos el modal y avisamos que todo salió de 10
       setIsLockedModalVisible(false);
       Alert.alert(
         '¡Excelente!',
         'Categoría desbloqueada con éxito. ¡A jugar! 🎸',
       );
-
-      // Recargamos las categorías para que el candado desaparezca
       await fetchCategories();
     } catch (error: any) {
-      // Atrapamos los errores que manda NestJS (ej: "No te alcanzan los puntos")
       const errorMessage =
         error.response?.data?.message ||
         'Hubo un error al intentar comprar la categoría.';
 
-      // Si el mensaje es un array (NestJS a veces manda arrays en errores de validación), lo unimos
       const finalMessage = Array.isArray(errorMessage)
         ? errorMessage.join('\n')
         : errorMessage;
@@ -223,16 +215,20 @@ export default function CreateGameScreen() {
         </Text>
       </View>
 
-      {/* TARJETA DE EXPLICACIÓN */}
+      {/* 🔥 TARJETA DE EXPLICACIÓN ACTUALIZADA */}
       <View className="bg-slate-800 p-6 rounded-3xl mb-8 border border-slate-700 shadow-lg shadow-black/40">
         <Text className="text-xl font-bold text-white mb-2">
           ¿Cómo se juega?
         </Text>
         <Text className="text-slate-400 text-base leading-6">
-          Elegí un tema. Te vamos a mostrar una frase icónica y tenés que
-          adivinar{' '}
+          Elegí un tema y adiviná{' '}
           <Text className="text-white font-bold">¿Quién Dijo Qué?</Text>. Sumás
-          puntos por cada acierto. ¡Mucha suerte!
+          puntos por cada acierto, pero atención: ¡Si metés{' '}
+          <Text className="text-orange-400 font-bold">
+            3 correctas seguidas
+          </Text>
+          , activás el multiplicador y ganás el{' '}
+          <Text className="text-white font-bold">doble de puntos</Text>!
         </Text>
       </View>
 
@@ -282,7 +278,7 @@ export default function CreateGameScreen() {
         visible={isLockedModalVisible}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => !isBuying && setIsLockedModalVisible(false)} // No deja cerrar si está comprando
+        onRequestClose={() => !isBuying && setIsLockedModalVisible(false)}
       >
         <Pressable
           className="flex-1 bg-black/80 justify-center items-center px-6"
@@ -304,14 +300,14 @@ export default function CreateGameScreen() {
               es exclusiva para usuarios Plus.
             </Text>
 
-            {/* 🔥 OPCIÓN 1: COMPRAR CON PUNTOS (CONECTADA AL BACKEND) */}
+            {/* OPCIÓN 1: COMPRAR CON PUNTOS */}
             <TouchableOpacity
               disabled={isBuying}
               className={`w-full py-4 rounded-xl mb-4 items-center flex-row justify-center shadow-lg ${isBuying ? 'bg-yellow-600/50' : 'bg-yellow-500 active:bg-yellow-600'}`}
               onPress={handleBuyCategory}
             >
               {isBuying ? (
-                <ActivityIndicator color="#0f172a" /> // slate-900
+                <ActivityIndicator color="#0f172a" />
               ) : (
                 <Text className="text-slate-900 font-extrabold text-lg">
                   Desbloquear por 500 pts

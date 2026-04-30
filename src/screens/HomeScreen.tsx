@@ -1,3 +1,8 @@
+import {
+  BannerAd,
+  BannerAdSize,
+  TestIds,
+} from 'react-native-google-mobile-ads';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -143,6 +148,16 @@ export default function HomeScreen() {
           Espacio reservado para Google AdMob
         </Text>
       </View>
+      {/* 💰 BANNER DE ADMOB 💰 */}
+      {/*<View className="items-center justify-center mt-6 w-full">
+        <BannerAd
+          unitId={TestIds.BANNER}
+          size={BannerAdSize.BANNER}
+          requestOptions={{
+            requestNonPersonalizedAdsOnly: true,
+          }}
+        />
+      </View>*/}
 
       {/* MODAL DEL MENÚ DE PERFIL */}
       <Modal
@@ -199,7 +214,6 @@ export default function HomeScreen() {
         onRequestClose={() => setIsHelpModalVisible(false)}
       >
         <View className="flex-1 bg-black/80 justify-center px-6">
-          {/* 🔥 FIX: Le agregamos flex-shrink a la tarjeta principal */}
           <View className="bg-slate-800 w-full p-6 rounded-3xl border border-slate-700 max-h-[85%] shrink">
             <View className="items-center mb-6">
               <Text className="text-5xl mb-2">📖</Text>
@@ -208,7 +222,6 @@ export default function HomeScreen() {
               </Text>
             </View>
 
-            {/* 🔥 FIX: Le sacamos el flex-1 y le pusimos shrink para que no colapse */}
             <ScrollView
               className="mb-6 w-full shrink"
               showsVerticalScrollIndicator={false}

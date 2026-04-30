@@ -11,7 +11,6 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { apiClient } from '../api/client';
 import LottieView from 'lottie-react-native';
 
-// Convertimos el TouchableOpacity en un componente animable
 const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -34,7 +33,13 @@ export default function GameRoundScreen() {
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // 🔥 ESTADOS NUEVOS: Racha, Multiplicador y Ref para el puntaje (evita bugs en el setTimeout)
   const [score, setScore] = useState(0);
+  const scoreRef = useRef(0);
+  const [streak, setStreak] = useState(0);
+  const [multiplier, setMultiplier] = useState(1);
+
   const [isLoading, setIsLoading] = useState(true);
   const [isFinished, setIsFinished] = useState(false);
 
@@ -46,13 +51,12 @@ export default function GameRoundScreen() {
   const [isChecking, setIsChecking] = useState(false);
 
   // ====================================================================
-  // 🔥 MOTORES DE ANIMACIÓN
+  // MOTORES DE ANIMACIÓN
   // ====================================================================
   const scoreScale = useRef(new Animated.Value(1)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  // Animación 1: Latido del puntaje
   useEffect(() => {
     if (score > 0) {
       Animated.sequence([
@@ -70,24 +74,21 @@ export default function GameRoundScreen() {
     }
   }, [score]);
 
-  // Animación 2: Barra de progreso fluida
   useEffect(() => {
     if (questions.length > 0) {
       Animated.timing(progressWidth, {
         toValue: (currentIndex + 1) / questions.length,
         duration: 400,
-        useNativeDriver: false, // El ancho (width) no puede usar native driver
+        useNativeDriver: false,
       }).start();
     }
   }, [currentIndex, questions.length]);
 
-  // Interpolación de la barra: Convierte de 0-1 a 0%-100%
   const widthPercent = progressWidth.interpolate({
     inputRange: [0, 1],
     outputRange: ['0%', '100%'],
   });
 
-  // Función para disparar el "Shake" (temblor)
   const triggerShake = () => {
     Animated.sequence([
       Animated.timing(shakeAnim, {
@@ -132,7 +133,7 @@ export default function GameRoundScreen() {
   }, [categoryId]);
 
   // ====================================================================
-  // LÓGICA DEL CONTADOR (Dividida en 2 pasos)
+  // LÓGICA DEL CONTADOR
   // ====================================================================
   useEffect(() => {
     if (isChecking || isFinished || isLoading || questions.length === 0) {
@@ -160,7 +161,7 @@ export default function GameRoundScreen() {
   };
 
   // ====================================================================
-  // VALIDACIÓN DE RESPUESTA
+  // VALIDACIÓN DE RESPUESTA & LÓGICA DE RACHA
   // ====================================================================
   const handleSelectOption = async (authorId: string) => {
     if (isChecking) return;
@@ -182,29 +183,52 @@ export default function GameRoundScreen() {
       const { isCorrect, correctAuthorId: actualCorrectId } = response.data;
       setCorrectAuthorId(actualCorrectId);
 
+      let currentStreak = streak;
+
       if (isCorrect) {
-        setScore((prev) => prev + 10); // El puntaje cambia y dispara el Latido
+        currentStreak += 1;
+        setStreak(currentStreak);
+
+        // 🔥 LÓGICA DEL MULTIPLICADOR (Racha >= 3 o antes de los 5 segundos)
+        const isSpeedBonus = timeLeft >= 8; // Si timeLeft es 6, 7, 8, 9 o 10
+        let activeMultiplier = 1;
+
+        if (currentStreak >= 3 || isSpeedBonus) {
+          activeMultiplier = 2;
+        }
+
+        setMultiplier(activeMultiplier);
+
+        const earnedPoints = 10 * activeMultiplier;
+        scoreRef.current += earnedPoints; // Guardamos el puntaje real en el ref
+        setScore(scoreRef.current); // Actualizamos la UI
       } else {
-        triggerShake(); // 🔥 Si es incorrecta, dispara el Temblor
+        triggerShake();
+        setStreak(0);
+        setMultiplier(1);
       }
 
       setTimeout(async () => {
         if (currentIndex < questions.length - 1) {
-          setCurrentIndex((prev) => prev + 1); // Dispara la Barra de Progreso
+          setCurrentIndex((prev) => prev + 1);
           setSelectedAuthorId(null);
           setCorrectAuthorId(null);
           setTimeLeft(10);
           setIsChecking(false);
+
+          // Si no tiene racha consolidada, limpiamos el multiplicador visual para la próxima
+          if (currentStreak < 3) {
+            setMultiplier(1);
+          }
         } else {
           setIsLoading(true);
-          const finalScore = score + (isCorrect ? 10 : 0);
-
           try {
-            await apiClient.patch('/users/me/score', { points: finalScore });
-            setScore(finalScore);
+            // Usamos scoreRef.current para evitar enviar un puntaje desactualizado
+            await apiClient.patch('/users/me/score', {
+              points: scoreRef.current,
+            });
             setIsFinished(true);
           } catch (error) {
-            setScore(finalScore);
             setIsFinished(true);
           } finally {
             setIsLoading(false);
@@ -233,7 +257,6 @@ export default function GameRoundScreen() {
   if (isFinished) {
     return (
       <View className="flex-1 bg-slate-900 px-6 pt-16 pb-8">
-        {/* 🔥 FIX DEL LOTTIE: Anclado a los 4 bordes y usando resizeMode */}
         <LottieView
           source={require('../../assets/animations/confetti.json')}
           autoPlay
@@ -250,7 +273,6 @@ export default function GameRoundScreen() {
           }}
         />
 
-        {/* CONTENEDOR CENTRAL: Botones y Puntos */}
         <View className="flex-1 items-center justify-center z-10 w-full">
           <Text className="text-6xl mb-6">🏆</Text>
           <Text className="text-white text-3xl font-extrabold text-center mb-2">
@@ -280,7 +302,6 @@ export default function GameRoundScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* PLACEHOLDER PUBLICIDAD: Clavado al fondo */}
         <View className="w-full bg-slate-800 border border-slate-700 rounded-xl h-24 items-center justify-center border-dashed mt-6 z-10">
           <Text className="text-slate-500 font-medium text-center px-4">
             Espacio reservado para Google AdMob
@@ -327,28 +348,47 @@ export default function GameRoundScreen() {
           </View>
         </View>
 
-        {/* 🔥 PUNTAJE ANIMADO (Latido) */}
-        <Animated.View
-          style={{ transform: [{ scale: scoreScale }] }}
-          className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm z-10 min-w-[75px] items-center"
-        >
-          <Text className="text-slate-900 font-extrabold">{score} pts</Text>
-        </Animated.View>
+        {/* 🔥 PUNTAJE ANIMADO CON ETIQUETA DE MULTIPLICADOR */}
+        <View className="items-center z-10 relative">
+          <Animated.View
+            style={{ transform: [{ scale: scoreScale }] }}
+            className="bg-yellow-400 px-4 py-2 rounded-full shadow-sm min-w-[75px] items-center"
+          >
+            <Text className="text-slate-900 font-extrabold">{score} pts</Text>
+          </Animated.View>
+
+          {/* Etiqueta de combo activo (Se muestra si el multiplicador es > 1) */}
+          {multiplier > 1 && (
+            <View className="absolute -bottom-4 bg-orange-500 px-2 py-0.5 rounded-md border border-orange-400 shadow-sm">
+              <Text className="text-white font-black text-xs">
+                🔥 x{multiplier}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* 🔥 BARRA DE PROGRESO ANIMADA */}
+      {/* BARRA DE PROGRESO ANIMADA */}
       <View className="w-full h-2 bg-slate-800 rounded-full mb-2 overflow-hidden">
         <Animated.View
           style={{
             width: widthPercent,
             height: '100%',
-            backgroundColor: '#d946ef', // fuchsia-500
+            backgroundColor: '#d946ef',
           }}
         />
       </View>
-      <Text className="text-slate-500 font-bold text-center mb-8 text-xs uppercase tracking-widest">
-        Pregunta {currentIndex + 1} de {questions.length}
-      </Text>
+      <View className="flex-row justify-between mb-8">
+        <Text className="text-slate-500 font-bold text-xs uppercase tracking-widest">
+          Pregunta {currentIndex + 1} de {questions.length}
+        </Text>
+        {/* Indicador de Racha */}
+        {streak >= 3 && (
+          <Text className="text-orange-400 font-bold text-xs uppercase tracking-widest">
+            Racha: {streak} 🔥
+          </Text>
+        )}
+      </View>
 
       {/* LA PREGUNTA */}
       <View className="justify-center mb-8">
@@ -370,27 +410,26 @@ export default function GameRoundScreen() {
       <View className="w-full">
         {currentQuestion?.options.map((option) => {
           let buttonStyle = 'bg-slate-800 border-slate-700';
-          let isSelectedAndWrong = false; // Flag para el temblor
+          let isSelectedAndWrong = false;
 
           if (isChecking) {
             if (option.id === correctAuthorId) {
               buttonStyle = 'bg-green-500 border-green-400';
             } else if (option.id === selectedAuthorId) {
               buttonStyle = 'bg-red-500 border-red-400';
-              isSelectedAndWrong = true; // El usuario tocó esta y estaba mal
+              isSelectedAndWrong = true;
             } else {
               buttonStyle = 'bg-slate-800/50 border-slate-700/50 opacity-50';
             }
           }
 
           return (
-            // 🔥 BOTÓN ANIMADO (Temblor)
             <AnimatedTouchableOpacity
               key={option.id}
               disabled={isChecking}
               onPress={() => handleSelectOption(option.id)}
               style={{
-                transform: [{ translateX: isSelectedAndWrong ? shakeAnim : 0 }], // Aplica el shake solo al equivocado
+                transform: [{ translateX: isSelectedAndWrong ? shakeAnim : 0 }],
               }}
               className={`w-full py-5 px-6 rounded-2xl border-2 mb-4 flex-row items-center justify-between shadow-lg shadow-black/20 ${buttonStyle}`}
             >
