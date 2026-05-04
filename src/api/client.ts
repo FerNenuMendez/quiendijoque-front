@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 export const apiClient = axios.create({
-  baseURL: `http://192.168.0.77:3000`,
+  baseURL: `https://quiendijoque-back.vercel.app/`,
   withCredentials: true, // Fundamental porque tu backend manda cookies
 });
 
