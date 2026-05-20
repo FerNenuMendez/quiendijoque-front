@@ -5,6 +5,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SecureStore from 'expo-secure-store';
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
@@ -29,6 +30,9 @@ export default function App() {
     //    console.log('AdMob Inicializado', adapterStatuses);
     //  });
     // Revisamos si el celular tiene la sesión guardada
+    
+    
+
     const checkSession = async () => {
       try {
         // Buscamos con la misma llave exacta que usamos en el LoginScreen

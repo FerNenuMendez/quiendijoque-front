@@ -34,8 +34,9 @@ export default function GameRoundScreen() {
   const navigation = useNavigation<any>();
   const { categoryId } = route.params;
 
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
+  const [questionIndex, setQuestionIndex] = useState(1);
+  const TOTAL_QUESTIONS = 10;
 
   const [score, setScore] = useState(0);
   const scoreRef = useRef(0);
@@ -123,14 +124,12 @@ export default function GameRoundScreen() {
   };
 
   useEffect(() => {
-    if (questions.length > 0) {
-      Animated.timing(progressWidth, {
-        toValue: (currentIndex + 1) / questions.length,
-        duration: 400,
-        useNativeDriver: false,
-      }).start();
-    }
-  }, [currentIndex, questions.length]);
+    Animated.timing(progressWidth, {
+      toValue: questionIndex / TOTAL_QUESTIONS,
+      duration: 400,
+      useNativeDriver: false,
+    }).start();
+  }, [questionIndex]);
 
   // GESTOR DE MÚSICA DE FONDO
   useEffect(() => {
@@ -175,29 +174,32 @@ export default function GameRoundScreen() {
     ]).start();
   };
 
-  // ====================================================================
-  // FETCH DE PREGUNTAS
-  // ====================================================================
+  const fetchNextQuestion = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiClient.get(`/game/next-question/${categoryId}`);
+      setCurrentQuestion(response.data.question);
+      setTimeLeft(10);
+      setIsChecking(false);
+      setSelectedAuthorId(null);
+      setCorrectAuthorId(null);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo generar la pregunta.');
+      navigation.navigate('CreateGame');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchRound = async () => {
-      try {
-        const response = await apiClient.get(`/game/round/${categoryId}`);
-        setQuestions(response.data.questions);
-      } catch (error) {
-        Alert.alert('Error', 'No se pudo generar la ronda.');
-        navigation.navigate('CreateGame');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchRound();
+    fetchNextQuestion();
   }, [categoryId]);
 
   // ====================================================================
   // LÓGICA DEL CONTADOR
   // ====================================================================
   useEffect(() => {
-    if (isChecking || isFinished || isLoading || questions.length === 0) {
+    if (isChecking || isFinished || isLoading || !currentQuestion) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -209,7 +211,7 @@ export default function GameRoundScreen() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isChecking, isFinished, isLoading, questions.length]);
+  }, [isChecking, isFinished, isLoading, currentQuestion]);
 
   useEffect(() => {
     if (timeLeft === 0 && !isChecking && !isFinished) {
@@ -231,7 +233,7 @@ export default function GameRoundScreen() {
     setIsChecking(true);
     setSelectedAuthorId(authorId);
 
-    const currentQuestion = questions[currentIndex];
+    if (!currentQuestion) return;
 
     try {
       const idToValidate =
@@ -241,65 +243,43 @@ export default function GameRoundScreen() {
         selectedAuthorId: idToValidate,
       });
 
-      const { isCorrect, correctAuthorId: actualCorrectId } = response.data;
+      const { isCorrect, correctAuthorId: actualCorrectId, pointsEarned, currentStreak: serverStreak } = response.data;
       setCorrectAuthorId(actualCorrectId);
-
-      let currentStreak = streak;
+      setStreak(serverStreak);
 
       if (isCorrect) {
         triggerHaptic('success');
-        currentStreak += 1;
-        setStreak(currentStreak);
 
-        // LÓGICA DEL MULTIPLICADOR
-        const isSpeedBonus = timeLeft >= 8;
-        let activeMultiplier = 1;
+        // LÓGICA DEL MULTIPLICADOR BASADA EN EL SERVIDOR
+        // Si ganamos más de 10 puntos (es decir, 20), sabemos que hubo multiplicador x2
+        const activeMultiplier = pointsEarned > 10 ? 2 : 1;
+        setMultiplier(activeMultiplier);
 
-        if (currentStreak >= 3 || isSpeedBonus) {
-          activeMultiplier = 2;
+        if (activeMultiplier === 2) {
           playSound('level');
         } else {
           playSound('correct');
         }
 
-        setMultiplier(activeMultiplier);
-
-        const earnedPoints = 10 * activeMultiplier;
-        scoreRef.current += earnedPoints;
+        // Usamos los puntos calculados de forma autoritativa por el backend
+        scoreRef.current += pointsEarned;
         setScore(scoreRef.current);
       } else {
         triggerHaptic('error');
         playSound('wrong');
         triggerShake();
-        setStreak(0);
         setMultiplier(1);
       }
 
       setTimeout(async () => {
-        if (currentIndex < questions.length - 1) {
-          setCurrentIndex((prev) => prev + 1);
-          setSelectedAuthorId(null);
-          setCorrectAuthorId(null);
-          setTimeLeft(10);
-          setIsChecking(false);
-
-          // Si no tiene racha consolidada, limpiamos el multiplicador visual para la próxima
-          if (currentStreak < 3) {
+        if (questionIndex < TOTAL_QUESTIONS) {
+          setQuestionIndex((prev) => prev + 1);
+          if (serverStreak < 3) {
             setMultiplier(1);
           }
+          fetchNextQuestion();
         } else {
-          setIsLoading(true);
-          try {
-            await apiClient.patch('/users/me/score', {
-              points: scoreRef.current,
-            });
-
-            setIsFinished(true);
-          } catch (error) {
-            setIsFinished(true);
-          } finally {
-            setIsLoading(false);
-          }
+          setIsFinished(true);
         }
       }, 1500);
     } catch (error) {
@@ -388,7 +368,6 @@ export default function GameRoundScreen() {
   // ====================================================================
   // PANTALLA DE JUEGO PRINCIPAL
   // ====================================================================
-  const currentQuestion = questions[currentIndex];
 
   return (
     <View className="flex-1 bg-slate-900 px-6 pt-16 pb-6">
@@ -454,7 +433,7 @@ export default function GameRoundScreen() {
       </View>
       <View className="flex-row justify-between mb-8">
         <Text className="text-slate-500 font-bold text-xs uppercase tracking-widest">
-          Pregunta {currentIndex + 1} de {questions.length}
+          Pregunta {questionIndex} de {TOTAL_QUESTIONS}
         </Text>
         {/* Indicador de Racha */}
         {streak >= 3 && (

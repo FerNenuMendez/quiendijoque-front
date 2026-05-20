@@ -79,6 +79,11 @@ export default function LoginScreen() {
         JSON.stringify(backendResponse.data.user),
       );
 
+      // 🔥 GUARDAMOS EL TOKEN
+      if (backendResponse.data.token) {
+        await SecureStore.setItemAsync('access_token', backendResponse.data.token);
+      }
+
       Alert.alert(
         '¡Éxito!',
         `Bienvenido, ${backendResponse.data.user.name} 🎸`,
