@@ -81,7 +81,7 @@ export default function LoginScreen() {
 
       // 🔥 GUARDAMOS EL TOKEN
       if (backendResponse.data.token) {
-        await SecureStore.setItemAsync('access_token', backendResponse.data.token);
+        await SecureStore.setItemAsync('jwt_token', backendResponse.data.token);
       }
 
       Alert.alert(
@@ -121,7 +121,7 @@ export default function LoginScreen() {
       );
 
       // 3. 🔥 GUARDAMOS EL TOKEN
-      await SecureStore.setItemAsync('access_token', response.data.token);
+      await SecureStore.setItemAsync('jwt_token', response.data.token);
 
       Alert.alert(
         '¡Éxito!',

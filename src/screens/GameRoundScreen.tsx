@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,55 +8,37 @@ import {
   Animated,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { apiClient } from '../api/client';
-import { Audio } from 'expo-av';
-import * as Haptics from 'expo-haptics';
 import LottieView from 'lottie-react-native';
+import { useGameEngine } from '../hooks/useGameEngine';
 import { audioService } from '../services/AudioService';
 
 const AnimatedTouchableOpacity =
   Animated.createAnimatedComponent(TouchableOpacity);
-
-interface Option {
-  id: string;
-  name: string;
-  avatar?: string;
-}
-
-interface Question {
-  quoteId: string;
-  text: string;
-  options: Option[];
-}
 
 export default function GameRoundScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { categoryId } = route.params;
 
-  const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [questionIndex, setQuestionIndex] = useState(1);
-  const TOTAL_QUESTIONS = 10;
-
-  const [score, setScore] = useState(0);
-  const scoreRef = useRef(0);
-  const [streak, setStreak] = useState(0);
-  const [multiplier, setMultiplier] = useState(1);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [isFinished, setIsFinished] = useState(false);
-
-  const [timeLeft, setTimeLeft] = useState(10);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const [selectedAuthorId, setSelectedAuthorId] = useState<string | null>(null);
-  const [correctAuthorId, setCorrectAuthorId] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState(false);
-
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  // Extraemos toda la lógica de estado y negocio de nuestro custom hook
+  const {
+    currentQuestion,
+    questionIndex,
+    TOTAL_QUESTIONS,
+    score,
+    streak,
+    multiplier,
+    isLoading,
+    isFinished,
+    timeLeft,
+    selectedAuthorId,
+    correctAuthorId,
+    isChecking,
+    handleSelectOption,
+  } = useGameEngine(categoryId);
 
   // ====================================================================
-  // MOTORES DE ANIMACIÓN
+  // MOTORES DE ANIMACIÓN (UI Pura)
   // ====================================================================
   const scoreScale = useRef(new Animated.Value(1)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
@@ -80,50 +62,6 @@ export default function GameRoundScreen() {
   }, [score]);
 
   useEffect(() => {
-    return sound
-      ? () => {
-          sound.unloadAsync();
-        }
-      : undefined;
-  }, [sound]);
-
-  // 🔥 Motor de Sonido
-  const playSound = async (type: 'correct' | 'wrong' | 'win' | 'level') => {
-    // 🛑 VÁLVULA DE CORTE: Si el sonido está desactivado en ajustes, no hace nada
-    if (!audioService.isSoundEnabled) return;
-
-    try {
-      let soundSource;
-      if (type === 'correct')
-        soundSource = require('../../assets/sounds/correcto.mp3');
-      else if (type === 'wrong')
-        soundSource = require('../../assets/sounds/error.mp3');
-      else if (type === 'win')
-        soundSource = require('../../assets/sounds/aplausos.mp3');
-      else if (type === 'level')
-        soundSource = require('../../assets/sounds/levelUp.mp3');
-
-      const { sound: newSound } = await Audio.Sound.createAsync(soundSource);
-      setSound(newSound);
-      await newSound.playAsync();
-    } catch (error) {
-      console.log('Error reproduciendo sonido:', error);
-    }
-  };
-
-  // 🔥 Motor de Vibración (Haptics)
-  const triggerHaptic = (type: 'success' | 'error') => {
-    // 🛑 VÁLVULA DE CORTE: Si la vibración está desactivada en ajustes, no hace nada
-    if (!audioService.isVibrationEnabled) return;
-
-    if (type === 'success') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    }
-  };
-
-  useEffect(() => {
     Animated.timing(progressWidth, {
       toValue: questionIndex / TOTAL_QUESTIONS,
       duration: 400,
@@ -131,13 +69,11 @@ export default function GameRoundScreen() {
     }).start();
   }, [questionIndex]);
 
-  // GESTOR DE MÚSICA DE FONDO
+  // GESTOR DE MÚSICA DE FONDO INICIAL (Se inicia aquí porque es atado a la pantalla)
   useEffect(() => {
-    // 1. Al entrar a la ronda: Apagamos Lobby, prendemos Tic-Tac
     audioService.stopLobby();
     audioService.playTicTac();
 
-    // 2. Al "desmontar" la pantalla (cuando toca la X o se va para atrás):
     return () => {
       audioService.stopTicTac();
       audioService.playLobby();
@@ -173,128 +109,6 @@ export default function GameRoundScreen() {
       }),
     ]).start();
   };
-
-  const fetchNextQuestion = async () => {
-    setIsLoading(true);
-    try {
-      const response = await apiClient.get(`/game/next-question/${categoryId}`);
-      setCurrentQuestion(response.data.question);
-      setTimeLeft(10);
-      setIsChecking(false);
-      setSelectedAuthorId(null);
-      setCorrectAuthorId(null);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudo generar la pregunta.');
-      navigation.navigate('CreateGame');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchNextQuestion();
-  }, [categoryId]);
-
-  // ====================================================================
-  // LÓGICA DEL CONTADOR
-  // ====================================================================
-  useEffect(() => {
-    if (isChecking || isFinished || isLoading || !currentQuestion) {
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isChecking, isFinished, isLoading, currentQuestion]);
-
-  useEffect(() => {
-    if (timeLeft === 0 && !isChecking && !isFinished) {
-      handleTimeOut();
-    }
-  }, [timeLeft, isChecking, isFinished]);
-
-  const handleTimeOut = () => {
-    handleSelectOption('TIME_OUT');
-  };
-
-  // ====================================================================
-  // VALIDACIÓN DE RESPUESTA & LÓGICA DE RACHA
-  // ====================================================================
-  const handleSelectOption = async (authorId: string) => {
-    if (isChecking) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    setIsChecking(true);
-    setSelectedAuthorId(authorId);
-
-    if (!currentQuestion) return;
-
-    try {
-      const idToValidate =
-        authorId === 'TIME_OUT' ? '000000000000000000000000' : authorId;
-      const response = await apiClient.post('/game/answer', {
-        quoteId: currentQuestion.quoteId,
-        selectedAuthorId: idToValidate,
-      });
-
-      const { isCorrect, correctAuthorId: actualCorrectId, pointsEarned, currentStreak: serverStreak } = response.data;
-      setCorrectAuthorId(actualCorrectId);
-      setStreak(serverStreak);
-
-      if (isCorrect) {
-        triggerHaptic('success');
-
-        // LÓGICA DEL MULTIPLICADOR BASADA EN EL SERVIDOR
-        // Si ganamos más de 10 puntos (es decir, 20), sabemos que hubo multiplicador x2
-        const activeMultiplier = pointsEarned > 10 ? 2 : 1;
-        setMultiplier(activeMultiplier);
-
-        if (activeMultiplier === 2) {
-          playSound('level');
-        } else {
-          playSound('correct');
-        }
-
-        // Usamos los puntos calculados de forma autoritativa por el backend
-        scoreRef.current += pointsEarned;
-        setScore(scoreRef.current);
-      } else {
-        triggerHaptic('error');
-        playSound('wrong');
-        triggerShake();
-        setMultiplier(1);
-      }
-
-      setTimeout(async () => {
-        if (questionIndex < TOTAL_QUESTIONS) {
-          setQuestionIndex((prev) => prev + 1);
-          if (serverStreak < 3) {
-            setMultiplier(1);
-          }
-          fetchNextQuestion();
-        } else {
-          setIsFinished(true);
-        }
-      }, 1500);
-    } catch (error) {
-      Alert.alert('Error', 'Hubo un problema de conexión.');
-      setIsChecking(false);
-      setSelectedAuthorId(null);
-    }
-  };
-
-  useEffect(() => {
-    if (isFinished) {
-      audioService.stopTicTac();
-      playSound('win');
-    }
-  }, [isFinished]);
 
   // ====================================================================
   // PANTALLAS (CARGA Y VICTORIA)
@@ -480,7 +294,7 @@ export default function GameRoundScreen() {
             <AnimatedTouchableOpacity
               key={option.id}
               disabled={isChecking}
-              onPress={() => handleSelectOption(option.id)}
+              onPress={() => handleSelectOption(option.id, triggerShake)}
               style={{
                 transform: [{ translateX: isSelectedAndWrong ? shakeAnim : 0 }],
               }}
